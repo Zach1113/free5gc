@@ -897,7 +897,7 @@ func udmConfig() error {
 }
 
 func nssfConfig() error {
-	var accessType3GPP models.AccessType = models.AccessType__3_GPP_ACCESS
+	var accessType3GPP models.AccessType = models.AccessType_3_GPP_ACCESS
 
 	nssf_factory.NssfConfig = &nssf_factory.Config{
 		Info: &nssf_factory.Info{
@@ -916,7 +916,7 @@ func nssfConfig() error {
 					Key: "cert/nssf.key",
 				},
 			},
-			ServiceNameList: []models.ServiceName{
+			ServiceNameList: []models.Nrf_NFMgmt_ServiceName{
 				"nnssf-nsselection",
 				"nnssf-nssaiavailability",
 			},
@@ -952,7 +952,7 @@ func nssfConfig() error {
 				Snssai: &models.Snssai{
 					Sst: 1,
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "10",
 				}},
@@ -961,7 +961,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000001",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "11",
 				}},
@@ -970,7 +970,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000002",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "12",
 				}, {
@@ -982,7 +982,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000003",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "13",
 				}},
@@ -990,7 +990,7 @@ func nssfConfig() error {
 				Snssai: &models.Snssai{
 					Sst: 2,
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "20",
 				}},
@@ -999,7 +999,7 @@ func nssfConfig() error {
 					Sst: 2,
 					Sd:  "000001",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "21",
 				}},
@@ -1008,7 +1008,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "fedcba",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "22",
 				}},
@@ -1017,7 +1017,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "112233",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "23",
 				}},
@@ -1030,7 +1030,7 @@ func nssfConfig() error {
 					"a1fba9ba-2e39-4e22-9c74-f749da571d0d",
 				},
 				NrfAmfSet: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1069,7 +1069,7 @@ func nssfConfig() error {
 			}, {
 				AmfSetId:  "2",
 				NrfAmfSet: "http://localhost:8084/nnrf-nfm/v1/nf-instances",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1109,7 +1109,7 @@ func nssfConfig() error {
 			}},
 			AmfList: []nssf_factory.AmfConfig{{
 				NfId: "469de254-2fe5-4ca0-8381-af3f500af77c",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1143,7 +1143,7 @@ func nssfConfig() error {
 				}},
 			}, {
 				NfId: "fbe604a8-27b2-417e-bd7c-8a7be2691f8d",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1184,7 +1184,7 @@ func nssfConfig() error {
 				}},
 			}, {
 				NfId: "b9e6e2cb-5ce8-4cb6-9173-a266dd9a2f0c",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1264,7 +1264,7 @@ func nssfConfig() error {
 				}, {
 					Sst: 2,
 				}},
-				RestrictedSnssaiList: []models.RestrictedSnssai{{
+				RestrictedSnssaiList: []models.Nssf_NSSAIAvail_RestrictedSnssai{{
 					HomePlmnId: &models.PlmnId{
 						Mcc: "310",
 						Mnc: "560",
@@ -1294,7 +1294,7 @@ func nssfConfig() error {
 					Sst: 2,
 					Sd:  "000001",
 				}},
-				RestrictedSnssaiList: []models.RestrictedSnssai{{
+				RestrictedSnssaiList: []models.Nssf_NSSAIAvail_RestrictedSnssai{{
 					HomePlmnId: &models.PlmnId{
 						Mcc: "310",
 						Mnc: "560",
@@ -1311,7 +1311,7 @@ func nssfConfig() error {
 					Mcc: "440",
 					Mnc: "10",
 				},
-				MappingOfSnssai: []models.MappingOfSnssai{{
+				MappingOfSnssai: []models.Nssf_NSSel_MappingOfSnssai{{
 					ServingSnssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "000001",
@@ -1354,7 +1354,7 @@ func nssfConfig() error {
 					Mcc: "310",
 					Mnc: "560",
 				},
-				MappingOfSnssai: []models.MappingOfSnssai{{
+				MappingOfSnssai: []models.Nssf_NSSel_MappingOfSnssai{{
 					ServingSnssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "000001",

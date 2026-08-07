@@ -76,7 +76,7 @@ func testULCLSessionBase(t *testing.T, ueCount int, upfNum int) {
 		imsi_all := "imsi-208930000" + imsi_e
 		fmt.Println(imsi_all)
 		ue := test.NewRanUeContext(imsi_all, int64(i+1), security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-			models.AccessType__3_GPP_ACCESS)
+			models.AccessType_3_GPP_ACCESS)
 		ue.AmfUeNgapId = int64(i + 1)
 		ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 			TestGenAuthData.MilenageTestSet19.OPC,

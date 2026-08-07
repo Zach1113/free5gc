@@ -84,7 +84,7 @@ func TestRegistration(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -289,7 +289,7 @@ func TestDeregistration(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -463,7 +463,7 @@ func TestServiceRequest(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -665,7 +665,7 @@ func TestGUTIRegistration(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -961,7 +961,7 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -1142,7 +1142,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -1394,7 +1394,7 @@ func TestXnHandover(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -1561,7 +1561,7 @@ func TestPaging(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -1813,7 +1813,7 @@ func TestN2Handover(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -2120,8 +2120,8 @@ func TestDuplicateRegistration(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -2362,8 +2362,8 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -2533,9 +2533,9 @@ func TestReSynchronization(t *testing.T) {
 	assert.Nil(t, err)
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -2791,9 +2791,9 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -3095,9 +3095,9 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetEAPAKAPrimeAuthSubscription(
 		TestGenAuthData.MilenageTestSet19.K,
@@ -3321,9 +3321,9 @@ func TestMultiAmfRegistration(t *testing.T) {
 	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -3531,9 +3531,9 @@ func TestNasReroute(t *testing.T) {
 	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,

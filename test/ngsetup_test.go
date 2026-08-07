@@ -181,8 +181,8 @@ func TestNGSetup(t *testing.T) {
 func TestCN(t *testing.T) {
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType__3_GPP_ACCESS)
+		models.AccessType_3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,

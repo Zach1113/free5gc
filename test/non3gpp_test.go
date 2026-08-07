@@ -293,15 +293,15 @@ func setupGreTunnel(greIfaceName, parentIfaceName string, ueTunnelAddr, n3iwfTun
 	return linkGRE, nil
 }
 
-func getAuthSubscription() (authSubs models.AuthenticationSubscription) {
+func getAuthSubscription() (authSubs models.Udr_DR_AuthenticationSubscription) {
 	authSubs.EncPermanentKey = TestGenAuthData.MilenageTestSet19.K
 	authSubs.EncOpcKey = TestGenAuthData.MilenageTestSet19.OPC
 	authSubs.AuthenticationManagementField = "8000"
 
-	authSubs.SequenceNumber = &models.SequenceNumber{
+	authSubs.SequenceNumber = &models.Udr_DR_SequenceNumber{
 		Sqn: TestGenAuthData.MilenageTestSet19.SQN,
 	}
-	authSubs.AuthenticationMethod = models.AuthMethod__5_G_AKA
+	authSubs.AuthenticationMethod = models.Udr_DR_AuthMethod_5_G_AKA
 	return
 }
 
