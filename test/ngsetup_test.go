@@ -15,7 +15,7 @@ import (
 	"test/consumerTestdata/UDM/TestGenAuthData"
 
 	"github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/mongoapi"
 	"github.com/stretchr/testify/assert"
@@ -171,7 +171,7 @@ func TestNGSetup(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// close Connection

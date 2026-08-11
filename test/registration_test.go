@@ -31,8 +31,7 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/nas/nasType"
 	"github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
-	"github.com/free5gc/ngap/ngapType"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/PolicyAuthorization"
 	"github.com/free5gc/util/httpwrapper"
@@ -48,10 +47,10 @@ const upfN3Ipv4Addr string = "10.200.200.102"
 func recvUeConfigUpdateCmd(t *testing.T, recvMsg []byte, conn *sctp.SCTPConn) {
 	n, err := conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.Equal(t, ngapPdu.Present, ngapType.NGAPPDUPresentInitiatingMessage, "Not NGAPPDUPresentInitiatingMessage")
-	assert.Equal(t, ngapPdu.InitiatingMessage.ProcedureCode.Value, ngapType.ProcedureCodeDownlinkNASTransport,
+	assert.Equal(t, ngapMessage.MessageTypeInitiatingMessage, ngapPdu.MessageType(), "Not an initiating message")
+	assert.Equal(t, ngapPdu.ProcedureCode(), ngapMessage.ProcedureCodeDownlinkNASTransport,
 		"Not ProcedureCodeDownlinkNASTransport")
 }
 
@@ -78,9 +77,9 @@ func TestRegistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
 	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
@@ -111,12 +110,12 @@ func TestRegistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage, "No NGAP Initiating Message received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage, "No NGAP Initiating Message received.")
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -134,10 +133,10 @@ func TestRegistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -157,10 +156,10 @@ func TestRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	// send ngap Initial Context Setup Response Msg
@@ -199,10 +198,10 @@ func TestRegistration(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceSetup,
 		"No PDUSessionResourceSetup received.")
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -284,7 +283,7 @@ func TestDeregistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -315,11 +314,11 @@ func TestDeregistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -337,10 +336,10 @@ func TestDeregistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -360,7 +359,7 @@ func TestDeregistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -401,12 +400,12 @@ func TestDeregistration(t *testing.T) {
 	// receive Deregistration Accept
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeDownlinkNASTransport,
+	require.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeDownlinkNASTransport,
 		"No DownlinkNASTransport received.")
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu, "NAS PDU is nil")
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeDeregistrationAcceptUEOriginatingDeregistration,
@@ -415,10 +414,10 @@ func TestDeregistration(t *testing.T) {
 	// receive ngap UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeUEContextRelease,
+	require.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeUEContextRelease,
 		"No UEContextReleaseCommand received.")
 
 	// send ngap UE Context Release Complete
@@ -458,7 +457,7 @@ func TestServiceRequest(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -489,11 +488,11 @@ func TestServiceRequest(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -511,10 +510,10 @@ func TestServiceRequest(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -534,7 +533,7 @@ func TestServiceRequest(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -571,7 +570,7 @@ func TestServiceRequest(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -590,7 +589,7 @@ func TestServiceRequest(t *testing.T) {
 	// receive UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap UE Context Release Complete
@@ -615,13 +614,13 @@ func TestServiceRequest(t *testing.T) {
 	// receive Initial Context Setup Request
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// update AMF UE NGAP ID
-	require.NotNil(t, ngapMsg.InitiatingMessage.Value.InitialContextSetupRequest)
-	ue.AmfUeNgapId = ngapMsg.InitiatingMessage.
-		Value.InitialContextSetupRequest.ProtocolIEs.List[0].Value.AMFUENGAPID.Value
+	initialContextSetup, ok := ngapMsg.(*ngapMessage.InitialContextSetupRequest)
+	require.True(t, ok)
+	ue.AmfUeNgapId = initialContextSetup.AMFUENGAPID.Value
 
 	// Send Initial Context Setup Response
 	sendMsg, err = test.GetInitialContextSetupResponseForServiceRequest(ue.AmfUeNgapId, ue.RanUeNgapId, ranN3Ipv4Addr)
@@ -660,7 +659,7 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// New UE
@@ -691,11 +690,11 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -713,10 +712,10 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -736,7 +735,7 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -777,12 +776,10 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Deregistration Accept
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.Equal(t, ngapType.NGAPPDUPresentInitiatingMessage, ngapMsg.Present)
-	require.Equal(t, ngapType.ProcedureCodeDownlinkNASTransport, ngapMsg.InitiatingMessage.ProcedureCode.Value)
-	require.Equal(t, ngapType.InitiatingMessagePresentDownlinkNASTransport, ngapMsg.InitiatingMessage.Value.Present)
-	nasPdu = test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapMsg.ProcedureCode())
+	nasPdu = test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeDeregistrationAcceptUEOriginatingDeregistration,
@@ -791,7 +788,7 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive ngap UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// send ngap UE Context Release Complete
@@ -821,21 +818,17 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Identity Request
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.Equal(t, ngapType.NGAPPDUPresentInitiatingMessage, ngapMsg.Present)
-	require.Equal(t, ngapType.ProcedureCodeDownlinkNASTransport, ngapMsg.InitiatingMessage.ProcedureCode.Value)
-	require.Equal(t, ngapType.InitiatingMessagePresentDownlinkNASTransport, ngapMsg.InitiatingMessage.Value.Present)
-	nasPdu = test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapMsg.ProcedureCode())
+	nasPdu = test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeIdentityRequest,
 		"Received wrong GMM message. Expected Identity Request.")
 
 	// update AMF UE NGAP ID
-	ue.AmfUeNgapId = ngapMsg.InitiatingMessage.
-		Value.DownlinkNASTransport.
-		ProtocolIEs.List[0].Value.AMFUENGAPID.Value
+	ue.AmfUeNgapId = ngapMsg.(*ngapMessage.DownlinkNASTransport).AMFUENGAPID.Value
 
 	// send NAS Identity Response
 	mobileIdentity := nasType.MobileIdentity{
@@ -853,12 +846,10 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.Equal(t, ngapType.NGAPPDUPresentInitiatingMessage, ngapMsg.Present)
-	require.Equal(t, ngapType.ProcedureCodeDownlinkNASTransport, ngapMsg.InitiatingMessage.ProcedureCode.Value)
-	require.Equal(t, ngapType.InitiatingMessagePresentDownlinkNASTransport, ngapMsg.InitiatingMessage.Value.Present)
-	nasPdu = test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapMsg.ProcedureCode())
+	nasPdu = test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -881,12 +872,10 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	require.Equal(t, ngapType.NGAPPDUPresentInitiatingMessage, ngapMsg.Present)
-	require.Equal(t, ngapType.ProcedureCodeDownlinkNASTransport, ngapMsg.InitiatingMessage.ProcedureCode.Value)
-	require.Equal(t, ngapType.InitiatingMessagePresentDownlinkNASTransport, ngapMsg.InitiatingMessage.Value.Present)
-	nasPdu = test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapMsg.ProcedureCode())
+	nasPdu = test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -904,7 +893,7 @@ func TestGUTIRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	require.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -956,7 +945,7 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -987,11 +976,11 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -1009,10 +998,10 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -1032,7 +1021,7 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -1069,7 +1058,7 @@ func TestPDUSessionReleaseRequest(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -1137,7 +1126,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -1201,11 +1190,11 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -1223,10 +1212,10 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -1246,7 +1235,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -1283,7 +1272,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -1304,7 +1293,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive PDU Session Resource Release Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	time.Sleep(1000 * time.Millisecond)
@@ -1324,7 +1313,7 @@ func TestPDUSessionReleaseAbnormal(t *testing.T) {
 	// receive UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap UE Context Release Complete
@@ -1372,7 +1361,7 @@ func TestXnHandover(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -1389,7 +1378,7 @@ func TestXnHandover(t *testing.T) {
 	// receive Second NGSetupResponse Msg
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -1420,11 +1409,11 @@ func TestXnHandover(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -1442,10 +1431,10 @@ func TestXnHandover(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -1465,7 +1454,7 @@ func TestXnHandover(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -1502,7 +1491,7 @@ func TestXnHandover(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -1521,7 +1510,7 @@ func TestXnHandover(t *testing.T) {
 	// receive Path Switch Request (XnHandover)
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -1556,7 +1545,7 @@ func TestPaging(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -1587,11 +1576,11 @@ func TestPaging(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -1609,10 +1598,10 @@ func TestPaging(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -1632,7 +1621,7 @@ func TestPaging(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -1669,7 +1658,7 @@ func TestPaging(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -1688,7 +1677,7 @@ func TestPaging(t *testing.T) {
 	// receive UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap UE Context Release Complete
@@ -1722,7 +1711,7 @@ func TestPaging(t *testing.T) {
 	// receive paing
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	ue.AmfUeNgapId = 2
@@ -1738,12 +1727,11 @@ func TestPaging(t *testing.T) {
 	// receive Initial Context Setup Request
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// update AMF UE NGAP ID
-	ue.AmfUeNgapId = ngapMsg.InitiatingMessage.
-		Value.InitialContextSetupRequest.ProtocolIEs.List[0].Value.AMFUENGAPID.Value
+	ue.AmfUeNgapId = ngapMsg.(*ngapMessage.InitialContextSetupRequest).AMFUENGAPID.Value
 
 	//send Initial Context Setup Response
 	sendMsg, err = test.GetInitialContextSetupResponseForServiceRequest(ue.AmfUeNgapId, ue.RanUeNgapId, ranN3Ipv4Addr)
@@ -1786,7 +1774,7 @@ func TestN2Handover(t *testing.T) {
 	// RAN1 receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -1808,7 +1796,7 @@ func TestN2Handover(t *testing.T) {
 	// RAN2 receive Second NGSetupResponse Msg
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -1839,11 +1827,11 @@ func TestN2Handover(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -1861,10 +1849,10 @@ func TestN2Handover(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -1884,7 +1872,7 @@ func TestN2Handover(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -1921,7 +1909,7 @@ func TestN2Handover(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -1985,7 +1973,7 @@ func TestN2Handover(t *testing.T) {
 	// Target RAN receive ngap Handover Request
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Target RAN create New UE
@@ -2008,7 +1996,7 @@ func TestN2Handover(t *testing.T) {
 	// Source RAN receive ngap Handover Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Target RAN send ngap Handover Notify
@@ -2020,7 +2008,7 @@ func TestN2Handover(t *testing.T) {
 	// Source RAN receive ngap UE Context Release Command
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Source RAN send ngap UE Context Release Complete
@@ -2051,7 +2039,7 @@ func TestN2Handover(t *testing.T) {
 	// Target RAN receive ngap Initial Context Setup Request Msg
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Target RAN send ngap Initial Context Setup Response Msg
@@ -2115,7 +2103,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -2147,11 +2135,11 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -2169,10 +2157,10 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -2192,7 +2180,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -2231,7 +2219,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -2256,7 +2244,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -2357,7 +2345,7 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -2389,11 +2377,11 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -2411,10 +2399,10 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -2434,7 +2422,7 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -2470,7 +2458,7 @@ func TestAFInfluenceOnTrafficRouting(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -2529,7 +2517,7 @@ func TestReSynchronization(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// New UE
@@ -2562,10 +2550,10 @@ func TestReSynchronization(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -2608,11 +2596,11 @@ func TestReSynchronization(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapMsg, err = ngap.Decoder(recvMsg[:n])
+	ngapMsg, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// Calculate for RES*
-	nasPdu = test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -2638,10 +2626,10 @@ func TestReSynchronization(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
 	require.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -2661,7 +2649,7 @@ func TestReSynchronization(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send ngap Initial Context Setup Response Msg
@@ -2700,7 +2688,7 @@ func TestReSynchronization(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -2786,9 +2774,9 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
 	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
@@ -2820,12 +2808,12 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage, "No NGAP Initiating Message received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage, "No NGAP Initiating Message received.")
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -2843,10 +2831,10 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -2866,10 +2854,10 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	// send ngap Initial Context Setup Response Msg
@@ -2908,10 +2896,10 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceSetup,
 		"No PDUSessionResourceSetup received.")
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -2939,10 +2927,10 @@ func TestRequestTwoPDUSessions(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceSetup,
 		"No PDUSessionResourceSetup received.")
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -3090,9 +3078,9 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
 	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
@@ -3125,12 +3113,12 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage, "No NGAP Initiating Message received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage, "No NGAP Initiating Message received.")
 
 	// Calculate for Response EAPMessage
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -3148,10 +3136,10 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -3171,10 +3159,10 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	// send ngap Initial Context Setup Response Msg
@@ -3213,10 +3201,10 @@ func TestEAPAKAPrimeAuthentication(t *testing.T) {
 	// receive 12. NGAP-PDU Session Resource Setup Request(DL nas transport((NAS msg-PDU session setup Accept)))
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceSetup,
 		"No PDUSessionResourceSetup received.")
 
 	// send 14. NGAP-PDU Session Resource Setup Response
@@ -3299,9 +3287,9 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// RAN connect to new amf
 	conn2, err := test.ConnectToAmf(amfN2Ipv4Addr2, ranN2Ipv4Addr, 38413, 9488)
@@ -3316,9 +3304,9 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
 	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
@@ -3350,12 +3338,12 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage, "No NGAP Initiating Message received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage, "No NGAP Initiating Message received.")
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -3373,10 +3361,10 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -3396,20 +3384,19 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	var guti *nasType.GUTI5G
-	for _, ie := range ngapPdu.InitiatingMessage.Value.InitialContextSetupRequest.ProtocolIEs.List {
-		if ie.Id.Value == ngapType.ProtocolIEIDNASPDU {
-			payload := []byte(ie.Value.NASPDU.Value)
-			m, err := test.NASDecode(ue, nas.GetSecurityHeaderType(payload), payload)
-			assert.Nil(t, err)
-			guti = m.RegistrationAccept.GUTI5G
-		}
+	initialContextSetup := ngapPdu.(*ngapMessage.InitialContextSetupRequest)
+	if initialContextSetup.NASPDU != nil {
+		payload := []byte(initialContextSetup.NASPDU.Value)
+		m, err := test.NASDecode(ue, nas.GetSecurityHeaderType(payload), payload)
+		assert.Nil(t, err)
+		guti = m.RegistrationAccept.GUTI5G
 	}
 
 	// send ngap Initial Context Setup Response Msg
@@ -3457,10 +3444,10 @@ func TestMultiAmfRegistration(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn2.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	// send ngap Initial Context Setup Response Msg
@@ -3509,9 +3496,9 @@ func TestNasReroute(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// RAN connect to new amf
 	conn2, err := test.ConnectToAmf(amfN2Ipv4Addr2, ranN2Ipv4Addr, 38413, 9488)
@@ -3526,9 +3513,9 @@ func TestNasReroute(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn2.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// New UE
 	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2, models.AccessType_3_GPP_ACCESS)
@@ -3560,12 +3547,12 @@ func TestNasReroute(t *testing.T) {
 	// receive NAS Authentication Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage, "No NGAP Initiating Message received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage, "No NGAP Initiating Message received.")
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
@@ -3583,10 +3570,10 @@ func TestNasReroute(t *testing.T) {
 	// receive NAS Security Mode Command Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
 	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
 	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
@@ -3605,20 +3592,19 @@ func TestNasReroute(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	var guti *nasType.GUTI5G
-	for _, ie := range ngapPdu.InitiatingMessage.Value.InitialContextSetupRequest.ProtocolIEs.List {
-		if ie.Id.Value == ngapType.ProtocolIEIDNASPDU {
-			payload := []byte(ie.Value.NASPDU.Value)
-			m, err := test.NASDecode(ue, nas.GetSecurityHeaderType(payload), payload)
-			assert.Nil(t, err)
-			guti = m.RegistrationAccept.GUTI5G
-		}
+	initialContextSetup := ngapPdu.(*ngapMessage.InitialContextSetupRequest)
+	if initialContextSetup.NASPDU != nil {
+		payload := []byte(initialContextSetup.NASPDU.Value)
+		m, err := test.NASDecode(ue, nas.GetSecurityHeaderType(payload), payload)
+		assert.Nil(t, err)
+		guti = m.RegistrationAccept.GUTI5G
 	}
 
 	// send ngap Initial Context Setup Response Msg
@@ -3670,10 +3656,10 @@ func TestNasReroute(t *testing.T) {
 	// receive ngap Initial Context Setup Request Msg
 	n, err = conn2.Read(recvMsg)
 	require.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	require.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeRerouteNASRequest,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeRerouteNASRequest,
 		"No RerouteNASRequest received.")
 
 	time.Sleep(1 * time.Second)

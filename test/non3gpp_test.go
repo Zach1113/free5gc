@@ -23,7 +23,7 @@ import (
 	"github.com/free5gc/ike"
 	"github.com/free5gc/ike/message"
 	ike_security "github.com/free5gc/ike/security"
-	"github.com/free5gc/ngap/ngapType"
+	ngapIE "github.com/free5gc/ngap/ie"
 
 	eap "github.com/free5gc/ike/eap"
 	ike_message "github.com/free5gc/ike/message"
@@ -36,7 +36,7 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/nas/nasType"
 	nasSecurity "github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/ueauth"
 )
@@ -86,7 +86,7 @@ type N3IWFRanUe struct {
 	IPAddrv4     string
 	IPAddrv6     string
 	PortNumber   int32
-	MaskedIMEISV *ngapType.MaskedIMEISV // TS 38.413 9.3.1.54
+	MaskedIMEISV *ngapIE.MaskedIMEISV // TS 38.413 9.3.1.54
 	Guti         string
 
 	// UE send CREATE_CHILD_SA response
@@ -100,15 +100,15 @@ type N3IWFRanUe struct {
 	TCPConnection net.Conn
 
 	/* Others */
-	Guami                            *ngapType.GUAMI
+	Guami                            *ngapIE.GUAMI
 	IndexToRfsp                      int64
-	Ambr                             *ngapType.UEAggregateMaximumBitRate
-	AllowedNssai                     *ngapType.AllowedNSSAI
-	RadioCapability                  *ngapType.UERadioCapability                // TODO: This is for RRC, can be deleted
-	CoreNetworkAssistanceInformation *ngapType.CoreNetworkAssistanceInformation // TS 38.413 9.3.1.15
+	Ambr                             *ngapIE.UEAggregateMaximumBitRate
+	AllowedNssai                     *ngapIE.AllowedNSSAI
+	RadioCapability                  *ngapIE.UERadioCapability                // TODO: This is for RRC, can be deleted
+	CoreNetworkAssistanceInformation *ngapIE.CoreNetworkAssistanceInformation // TS 38.413 9.3.1.15
 	IMSVoiceSupported                int32
 	RRCEstablishmentCause            int16
-	PduSessionReleaseList            ngapType.PDUSessionResourceReleasedListRelRes
+	PduSessionReleaseList            ngapIE.PDUSessionResourceReleasedListRelRes
 }
 
 type IKESecurityAssociation struct {
@@ -1659,7 +1659,7 @@ func TestNon3GPPUE(t *testing.T) {
 	// We don't check any of message in UeConfigUpdate Message
 	if n, err := tcpConnWithN3IWF.Read(buffer); err != nil {
 		t.Fatalf("No UeConfigUpdate Message: %+v", err)
-		_, err := ngap.Decoder(buffer[2:n])
+		_, err := ngapMessage.Parse(buffer[2:n])
 		if err != nil {
 			t.Fatalf("UeConfigUpdate Decode Error: %+v", err)
 		}

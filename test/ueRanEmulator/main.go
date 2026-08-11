@@ -17,7 +17,7 @@ import (
 
 	"github.com/free5gc/nas/ie"
 	"github.com/free5gc/nas/message"
-	"github.com/free5gc/ngap"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 )
 
@@ -175,7 +175,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
@@ -208,13 +208,13 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	if nasPdu == nil {
 		err = fmt.Errorf("GetNasPdu failed")
 		return err
@@ -247,7 +247,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return nil
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return nil
 	}
@@ -343,7 +343,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}

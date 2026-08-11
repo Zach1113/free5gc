@@ -7,7 +7,6 @@ require (
 	github.com/calee0219/fatal v0.0.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/amf v0.0.0
-	github.com/free5gc/aper v1.1.1
 	github.com/free5gc/ausf v0.0.0
 	github.com/free5gc/bsf v0.0.0
 	github.com/free5gc/chf v1.2.2

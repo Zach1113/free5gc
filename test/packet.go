@@ -9,10 +9,11 @@ import (
 	"net"
 	"test/ngapTestpacket"
 
-	"github.com/free5gc/aper"
 	"github.com/free5gc/nas/ie"
 	"github.com/free5gc/nas/message"
-	"github.com/free5gc/ngap"
+	ngapAper "github.com/free5gc/ngap/aper"
+	ngapIE "github.com/free5gc/ngap/ie"
+	ngapMessage "github.com/free5gc/ngap/message"
 )
 
 // This function is used for nas packet
@@ -70,56 +71,50 @@ func GetPDUAddress(accept *message.PDUSessEstAccept) (net.IP, error) {
 }
 
 func GetNGSetupRequest(gnbId []byte, bitlength uint64, name string, tac string, sst string, sd string) ([]byte, error) {
-	message := ngapTestpacket.BuildNGSetupRequest()
-	// GlobalRANNodeID
-	ie := message.InitiatingMessage.Value.NGSetupRequest.ProtocolIEs.List[0]
-	gnbID := ie.Value.GlobalRANNodeID.GlobalGNBID.GNBID.GNBID
-	gnbID.Bytes = gnbId
-	gnbID.BitLength = bitlength
-	// RANNodeName
-	ie = message.InitiatingMessage.Value.NGSetupRequest.ProtocolIEs.List[1]
-	ie.Value.RANNodeName.Value = name
+	message := ngapTestpacket.BuildNGSetupRequest().(*ngapMessage.NGSetupRequest)
+	globalGNBID := message.GlobalRANNodeID.Choice.(*ngapIE.GlobalGNBID)
+	gnbID := globalGNBID.GNBID.Choice.(*ngapIE.GNBIDForGNBID)
+	gnbID.Value.Bytes = gnbId
+	gnbID.Value.BitLength = bitlength
+	message.RANNodeName.Value = ngapAper.PrintableString(name)
 	if tac != "" {
-		ie = message.InitiatingMessage.Value.NGSetupRequest.ProtocolIEs.List[2]
-		ie.Value.SupportedTAList.List[0].TAC.Value = aper.OctetString(tac)
+		message.SupportedTAList.List[0].TAC.Value = ngapAper.OctetString(tac)
 	}
 	if sst != "" {
-		ie = message.InitiatingMessage.Value.NGSetupRequest.ProtocolIEs.List[2]
-		ie.Value.SupportedTAList.List[0].BroadcastPLMNList.List[0].TAISliceSupportList.List[0].SNSSAI.SST.Value = aper.OctetString(sst)
+		message.SupportedTAList.List[0].BroadcastPLMNList.List[0].TAISliceSupportList.List[0].SNSSAI.SST.Value = ngapAper.OctetString(sst)
 	}
 	if sd != "" {
-		ie = message.InitiatingMessage.Value.NGSetupRequest.ProtocolIEs.List[2]
-		ie.Value.SupportedTAList.List[0].BroadcastPLMNList.List[0].TAISliceSupportList.List[0].SNSSAI.SD.Value = aper.OctetString(sd)
+		message.SupportedTAList.List[0].BroadcastPLMNList.List[0].TAISliceSupportList.List[0].SNSSAI.SD.Value = ngapAper.OctetString(sd)
 	}
 
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetInitialUEMessage(ranUeNgapID int64, nasPdu []byte, fiveGSTmsi string) ([]byte, error) {
 	message := ngapTestpacket.BuildInitialUEMessage(ranUeNgapID, nasPdu, fiveGSTmsi)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetUplinkNASTransport(amfUeNgapID, ranUeNgapID int64, nasPdu []byte) ([]byte, error) {
 	message := ngapTestpacket.BuildUplinkNasTransport(amfUeNgapID, ranUeNgapID, nasPdu)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetInitialContextSetupResponse(amfUeNgapID int64, ranUeNgapID int64) ([]byte, error) {
 	message := ngapTestpacket.BuildInitialContextSetupResponseForRegistraionTest(amfUeNgapID, ranUeNgapID)
 
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetInitialContextSetupResponseForServiceRequest(
 	amfUeNgapID int64, ranUeNgapID int64, ipv4 string) ([]byte, error) {
 	message := ngapTestpacket.BuildInitialContextSetupResponse(amfUeNgapID, ranUeNgapID, ipv4, nil)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetPDUSessionResourceSetupResponse(pduSessionId int64, amfUeNgapID int64, ranUeNgapID int64, ipv4 string) ([]byte, error) {
 	message := ngapTestpacket.BuildPDUSessionResourceSetupResponseForRegistrationTest(pduSessionId, amfUeNgapID, ranUeNgapID, ipv4)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 // EncodeNasPduWithSecurity takes an already-built plain NAS PDU and wraps it in
@@ -166,42 +161,41 @@ func DecapNasPduFromEnvelope(envelop []byte) ([]byte, int, error) {
 
 func GetUEContextReleaseComplete(amfUeNgapID int64, ranUeNgapID int64, pduSessionIDList []int64) ([]byte, error) {
 	message := ngapTestpacket.BuildUEContextReleaseComplete(amfUeNgapID, ranUeNgapID, pduSessionIDList)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetUEContextReleaseRequest(amfUeNgapID int64, ranUeNgapID int64, pduSessionIDList []int64) ([]byte, error) {
 	message := ngapTestpacket.BuildUEContextReleaseRequest(amfUeNgapID, ranUeNgapID, pduSessionIDList)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetPDUSessionResourceReleaseResponse(amfUeNgapID int64, ranUeNgapID int64) ([]byte, error) {
 	message := ngapTestpacket.BuildPDUSessionResourceReleaseResponseForReleaseTest(amfUeNgapID, ranUeNgapID)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 func GetPathSwitchRequest(amfUeNgapID int64, ranUeNgapID int64) ([]byte, error) {
-	message := ngapTestpacket.BuildPathSwitchRequest(amfUeNgapID, ranUeNgapID)
-	message.InitiatingMessage.Value.PathSwitchRequest.ProtocolIEs.List =
-		message.InitiatingMessage.Value.PathSwitchRequest.ProtocolIEs.List[0:5]
-	return ngap.Encoder(message)
+	message := ngapTestpacket.BuildPathSwitchRequest(amfUeNgapID, ranUeNgapID).(*ngapMessage.PathSwitchRequest)
+	message.PDUSessionResourceFailedToSetupListPSReq = nil
+	return message.MarshalBinary()
 }
 
 func GetHandoverRequired(
 	amfUeNgapID int64, ranUeNgapID int64, targetGNBID []byte, targetCellID []byte) ([]byte, error) {
 	message := ngapTestpacket.BuildHandoverRequired(amfUeNgapID, ranUeNgapID, targetGNBID, targetCellID)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetHandoverRequestAcknowledge(amfUeNgapID int64, ranUeNgapID int64) ([]byte, error) {
 	message := ngapTestpacket.BuildHandoverRequestAcknowledge(amfUeNgapID, ranUeNgapID)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetHandoverNotify(amfUeNgapID int64, ranUeNgapID int64) ([]byte, error) {
 	message := ngapTestpacket.BuildHandoverNotify(amfUeNgapID, ranUeNgapID)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
 
 func GetPDUSessionResourceSetupResponseForPaging(amfUeNgapID int64, ranUeNgapID int64, ipv4 string) ([]byte, error) {
 	message := ngapTestpacket.BuildPDUSessionResourceSetupResponseForPaging(amfUeNgapID, ranUeNgapID, ipv4)
-	return ngap.Encoder(message)
+	return message.MarshalBinary()
 }
