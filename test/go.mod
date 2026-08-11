@@ -19,7 +19,7 @@ require (
 	github.com/free5gc/nssf v0.0.0
 	github.com/free5gc/openapi v1.2.5-0.20260810070107-542a2cceaa21
 	github.com/free5gc/pcf v0.0.0
-	github.com/free5gc/sctp v1.1.2
+	github.com/free5gc/sctp v1.1.3-0.20260707033444-1d50775f182e
 	github.com/free5gc/smf v1.4.3
 	github.com/free5gc/tngf v0.0.0-00010101000000-000000000000
 	github.com/free5gc/udm v0.0.0

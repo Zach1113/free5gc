@@ -180,8 +180,8 @@ github.com/free5gc/openapi v1.2.5-0.20260810070107-542a2cceaa21/go.mod h1:ggzAcw
 github.com/free5gc/openapi v1.2.5-0.20260810070107-542a2cceaa21 h1:FucFO/QJlu1MJaeiEgR0OeKM0J7tbiCrwo7sh3gM1us=
 github.com/free5gc/pfcp v1.1.2/go.mod h1:Odjw78gt0DYEbwUQD4w/vU+GvfrRZLgqyaL+AvwD4ww=
 github.com/free5gc/pfcp v1.1.2 h1:onqDTlZok41OiagZxzw9+2c5bxMSOwqHOYxbORRYUTw=
-github.com/free5gc/sctp v1.1.2/go.mod h1:wOvct9P1T6DGk1fxkleF7zeTHsU8ZKxKzewu2ciZh/4=
-github.com/free5gc/sctp v1.1.2 h1:nNEr4uywIFmVBZauaNVJRkIDXr4nrpMmM0TPIck5QPA=
+github.com/free5gc/sctp v1.1.3-0.20260707033444-1d50775f182e/go.mod h1:wOvct9P1T6DGk1fxkleF7zeTHsU8ZKxKzewu2ciZh/4=
+github.com/free5gc/sctp v1.1.3-0.20260707033444-1d50775f182e h1:jrV1fRZTQKnjGg3sikEMGOiIWOsooXygaCr1YruJphY=
 github.com/free5gc/tlv v1.1.1/go.mod h1:b1ipPTEeJEylQEeIC2JzCaTvRmh5InGhvnRn3AwJE0E=
 github.com/free5gc/tlv v1.1.1 h1:P4dsVdVqMwwHVlOG4ESeQAfDU9T11IKh242VOVHRr0M=
 github.com/free5gc/util v1.3.2/go.mod h1:wXObe2iF465VRdkE1Z5YkiSuHXlCT8HJ+yc7p9t5hMs=

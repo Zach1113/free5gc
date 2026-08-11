@@ -1,8 +1,8 @@
 package TestComm
 
 import (
-	"github.com/free5gc/aper"
-	"github.com/free5gc/ngap/ngapType"
+	"github.com/free5gc/ngap/aper"
+	ngapIE "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
 )
 
@@ -117,21 +117,27 @@ func init() {
 	// }
 	// fmt.Printf("	out : %0x\n", rawData)
 	// transfer := GetPDUSessionResourceReleaseCommandTransfer()
-	// var data ngapType.PDUSessionResourceReleaseCommandTransfer
+	// var data ngapIE.PDUSessionResourceReleaseCommandTransfer
 	// aper.UnmarshalWithParams(*transfer, &data, "valueExt")
 	// spew.Dump(data)
 
 }
 
-func buildPDUSessionResourceReleaseCommandTransfer() (data ngapType.PDUSessionResourceReleaseCommandTransfer) {
-	cause := &data.Cause
-	cause.Present = ngapType.CausePresentMisc
-	cause.Misc = new(ngapType.CauseMisc)
-	misc := cause.Misc
-	misc.Value = ngapType.CauseMiscPresentHardwareFailure
+func buildPDUSessionResourceReleaseCommandTransfer() (data ngapIE.PDUSessionResourceReleaseCommandTransfer) {
+	data.Cause = &ngapIE.Cause{
+		Choice: &ngapIE.CauseMisc{Value: ngapIE.CauseMiscPresentHardwareFailure},
+	}
 	return
 }
+
 func GetPDUSessionResourceReleaseCommandTransfer() []byte {
-	encodeData, _ := aper.MarshalWithParams(N2InfoTable[models.Amf_Comm_NgapIeType_PDU_RES_REL_CMD], "valueExt")
-	return encodeData
+	transfer, ok := N2InfoTable[models.Amf_Comm_NgapIeType_PDU_RES_REL_CMD].(ngapIE.PDUSessionResourceReleaseCommandTransfer)
+	if !ok {
+		return nil
+	}
+	data := aper.NewPerBitData(nil)
+	if err := transfer.Write(data); err != nil {
+		return nil
+	}
+	return data.Bytes()
 }
