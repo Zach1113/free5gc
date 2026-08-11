@@ -3,19 +3,8 @@ package test_test
 import (
 	"encoding/hex"
 	"fmt"
-	"net"
-	"sync"
-	"test"
-	"test/consumerTestdata/UDM/TestGenAuthData"
-	"test/nasTestpacket"
-	"test/ngapTestpacket"
-	"testing"
-	"time"
-
-	"github.com/free5gc/nas"
-	"github.com/free5gc/nas/nasMessage"
-	"github.com/free5gc/nas/nasType"
-	"github.com/free5gc/nas/security"
+	nasIE "github.com/free5gc/nas/ie"
+	nasMessage "github.com/free5gc/nas/message"
 	"github.com/free5gc/ngap/aper"
 	ngapIE "github.com/free5gc/ngap/ie"
 	ngapMessage "github.com/free5gc/ngap/message"
@@ -25,6 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+	"net"
+	"sync"
+	"test"
+	"test/consumerTestdata/UDM/TestGenAuthData"
+	"test/nasTestpacket"
+	"test/ngapTestpacket"
+	"testing"
+	"time"
 )
 
 const (
@@ -158,7 +155,7 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	var err error
 
 	// New UE
-	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
+	ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA0, nasMessage.AlgIntegrity128NIA2,
 		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
@@ -170,14 +167,11 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	test.InsertUeToMongoDB(t, ue, servingPlmnId)
 
 	// send InitialUeMessage(Registration Request)(imsi-208930000007487)
-	mobileIdentity5GS := nasType.MobileIdentity5GS{
-		Len:    13, // suci
-		Buffer: []uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78},
-	}
+	mobileIdentity5GS := nasTestpacket.MobileIdentity5GS([]uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78})
 
 	ueSecurityCapability := ue.GetUESecurityCapability()
 	registrationRequest := nasTestpacket.GetRegistrationRequest(
-		nasMessage.RegistrationType5GSInitialRegistration, mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
+		nasIE.RegType_InitialReg, mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
 	sendMsg, err = test.GetInitialUEMessage(ue.RanUeNgapId, registrationRequest, "")
 	assert.Nil(t, err)
 	_, err = MranConn.Write(sendMsg)
@@ -193,10 +187,9 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	// Calculate for RES*
 	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
-	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
-	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
+	require.Equal(t, nasPdu.MsgType(), nasMessage.MsgTypeAuthReq,
 		"Received wrong GMM message. Expected Authentication Request.")
-	rand := nasPdu.AuthenticationRequest.GetRANDValue()
+	rand := nasPdu.(*nasMessage.AuthReq).AuthParamRAND5GAuthChlg.Rand
 	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand[:], "5G:mnc093.mcc208.3gppnetwork.org")
 
 	// send NAS Authentication Response
@@ -214,15 +207,14 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	assert.NotNil(t, ngapPdu)
 	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
-	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
-	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
+	require.Equal(t, nasPdu.MsgType(), nasMessage.MsgTypeSecModeCmd,
 		"Received wrong GMM message. Expected Security Mode Command.")
 
 	// send NAS Security Mode Complete Msg
-	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
+	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasIE.RegType_InitialReg,
 		mobileIdentity5GS, nil, ueSecurityCapability, ue.Get5GMMCapability(), nil, nil)
 	pdu = nasTestpacket.GetSecurityModeComplete(registrationRequestWith5GMM)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCipheredWithNew5gNasSecurityContext, true, true)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCipheredWithNew5gNasSecCtx, true, true)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)
@@ -246,7 +238,7 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 
 	// send NAS Registration Complete Msg
 	pdu = nasTestpacket.GetRegistrationComplete(nil)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)
@@ -282,8 +274,8 @@ func pduSessionEstablishment(t *testing.T, ue *test.RanUeContext, MranConn *sctp
 		Sst: 1,
 		Sd:  "fedcba",
 	}
-	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(10, nasMessage.ULNASTransportRequestTypeInitialRequest, "internet", &sNssai)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(10, nasIE.ReqType_InitialReq, "internet", &sNssai)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)

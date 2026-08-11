@@ -219,7 +219,11 @@ func ueRanEmulator() error {
 		err = fmt.Errorf("GetNasPdu failed")
 		return err
 	}
-	rand := nasPdu.AuthenticationRequest.GetRANDValue()
+	authRequest, ok := nasPdu.(*message.AuthReq)
+	if !ok || authRequest.AuthParamRAND5GAuthChlg == nil {
+		return fmt.Errorf("expected AuthReq with RAND, got %T", nasPdu)
+	}
+	rand := authRequest.AuthParamRAND5GAuthChlg.Rand
 
 	var mncPad string
 	if len(uerancfg.Mnc) == 2 {
@@ -229,7 +233,7 @@ func ueRanEmulator() error {
 	}
 	snName := "5G:mnc" + mncPad + ".mcc" + uerancfg.Mcc + ".3gppnetwork.org"
 
-	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand[:], snName)
+	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand, snName)
 
 	// send NAS Authentication Response
 	pdu := nasTestpacket.GetAuthenticationResponse(resStat, "")

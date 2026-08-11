@@ -14,7 +14,7 @@ import (
 	"test/app"
 	"test/consumerTestdata/UDM/TestGenAuthData"
 
-	"github.com/free5gc/nas/security"
+	nasMessage "github.com/free5gc/nas/message"
 	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/mongoapi"
@@ -180,9 +180,9 @@ func TestNGSetup(t *testing.T) {
 
 func TestCN(t *testing.T) {
 	// New UE
-	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
+	ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA2, nasMessage.AlgIntegrity128NIA2,
 		models.AccessType_3_GPP_ACCESS)
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA0, nasMessage.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,

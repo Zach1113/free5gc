@@ -1,6 +1,7 @@
 package ngapTestpacket_test
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"test/ngapTestpacket"
 
 	"github.com/free5gc/ngap/aper"
+	ngapIE "github.com/free5gc/ngap/ie"
 	ngapMessage "github.com/free5gc/ngap/message"
 )
 
@@ -420,6 +422,16 @@ func TestBuildLocationReportingFailureIndication(t *testing.T) {
 
 func TestBuildPDUSessionResourceSetupResponse(t *testing.T) {
 	pdu := ngapTestpacket.BuildPDUSessionResourceSetupResponse(123, 456, "10.200.200.1")
+	response := pdu.(*ngapMessage.PDUSessionResourceSetupResponse)
+	encodedTransfer := *response.PDUSessionResourceSetupListSURes.List[0].PDUSessionResourceSetupResponseTransfer
+	transfer := new(ngapIE.PDUSessionResourceSetupResponseTransfer)
+	if err := ngapIE.UnmarshalBinary(encodedTransfer, transfer); err != nil {
+		t.Fatal(err)
+	}
+	tunnel := transfer.DLQosFlowPerTNLInformation.UPTransportLayerInformation.Choice.(*ngapIE.GTPTunnel)
+	if want := []byte{10, 200, 200, 1}; !bytes.Equal(tunnel.TransportLayerAddress.Value.Bytes, want) {
+		t.Fatalf("unexpected transport address: got %v, want %v", tunnel.TransportLayerAddress.Value.Bytes, want)
+	}
 	encodeData, err := pdu.MarshalBinary()
 	if err != nil {
 		t.Error(err.Error())
@@ -695,7 +707,24 @@ func TestBuildAMFConfigurationUpdateAcknowledge(t *testing.T) {
 }
 
 func TestBuildHandoverRequired(t *testing.T) {
-	pdu := ngapTestpacket.BuildHandoverRequired(1, 2, []byte{0x00, 0x01, 0x02}, []byte{0x01, 0x20})
+	targetGNBID := []byte{0x00, 0x01, 0x02}
+	targetCellID := []byte{0x01, 0x20}
+	pdu := ngapTestpacket.BuildHandoverRequired(1, 2, targetGNBID, targetCellID)
+	required := pdu.(*ngapMessage.HandoverRequired)
+	target := required.TargetID.Choice.(*ngapIE.TargetRANNodeID)
+	globalGNB := target.GlobalRANNodeID.Choice.(*ngapIE.GlobalGNBID)
+	gnbID := globalGNB.GNBID.Choice.(*ngapIE.GNBIDForGNBID)
+	if !bytes.Equal(gnbID.Value.Bytes, targetGNBID) {
+		t.Fatalf("unexpected target gNB ID: got %x, want %x", gnbID.Value.Bytes, targetGNBID)
+	}
+	container := new(ngapIE.SourceNGRANNodeToTargetNGRANNodeTransparentContainer)
+	if err := ngapIE.UnmarshalBinary(required.SourceToTargetTransparentContainer.Value, container); err != nil {
+		t.Fatal(err)
+	}
+	nrcgi := container.TargetCellID.Choice.(*ngapIE.NRCGI)
+	if want := append(append([]byte(nil), targetGNBID...), targetCellID...); !bytes.Equal(nrcgi.NRCellIdentity.Value.Bytes, want) {
+		t.Fatalf("unexpected target cell ID: got %x, want %x", nrcgi.NRCellIdentity.Value.Bytes, want)
+	}
 	encodeData, err := pdu.MarshalBinary()
 	if err != nil {
 		t.Error(err.Error())

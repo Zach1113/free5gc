@@ -131,6 +131,10 @@ func BuildInitialContextSetupResponse(amfUeNgapID, ranUeNgapID int64, ipv4 strin
 ) ngapMessage.Message {
 	m := sampleInitialContextSetupResponse().(*ngapMessage.InitialContextSetupResponse)
 	m.AMFUENGAPID, m.RANUENGAPID = ids(amfUeNgapID, ranUeNgapID)
+	if m.PDUSessionResourceSetupListCxtRes != nil && len(m.PDUSessionResourceSetupListCxtRes.List) != 0 {
+		transfer := aper.OctetString(buildPDUSessionResourceSetupResponseTransfer(ipv4))
+		m.PDUSessionResourceSetupListCxtRes.List[0].PDUSessionResourceSetupResponseTransfer = &transfer
+	}
 	m.PDUSessionResourceFailedToSetupListCxtRes = pduSessionFailedList
 	return m
 }
@@ -170,12 +174,18 @@ func BuildHandoverNotify(amfUeNgapID, ranUeNgapID int64) ngapMessage.Message {
 func BuildHandoverRequired(amfUeNgapID, ranUeNgapID int64, targetGNBID, targetCellID []byte) ngapMessage.Message {
 	m := sampleHandoverRequired().(*ngapMessage.HandoverRequired)
 	m.AMFUENGAPID, m.RANUENGAPID = ids(amfUeNgapID, ranUeNgapID)
+	m.TargetID = targetRANNodeID(targetGNBID)
+	m.SourceToTargetTransparentContainer.Value = GetSourceToTargetTransparentTransfer(targetGNBID, targetCellID)
 	return m
 }
 
 func BuildPDUSessionResourceSetupResponse(amfUeNgapID, ranUeNgapID int64, ipv4 string) ngapMessage.Message {
 	m := samplePDUSessionResourceSetupResponse().(*ngapMessage.PDUSessionResourceSetupResponse)
 	m.AMFUENGAPID, m.RANUENGAPID = ids(amfUeNgapID, ranUeNgapID)
+	if m.PDUSessionResourceSetupListSURes != nil && len(m.PDUSessionResourceSetupListSURes.List) != 0 {
+		transfer := aper.OctetString(buildPDUSessionResourceSetupResponseTransfer(ipv4))
+		m.PDUSessionResourceSetupListSURes.List[0].PDUSessionResourceSetupResponseTransfer = &transfer
+	}
 	return m
 }
 
@@ -435,8 +445,7 @@ func marshalTransfer(value interface{ Write(*aper.PerBitData) error }) []byte {
 }
 
 func GetPDUSessionResourceSetupResponseTransfer(ipv4 string) []byte {
-	m := BuildPDUSessionResourceSetupResponse(1, 2, ipv4).(*ngapMessage.PDUSessionResourceSetupResponse)
-	return append([]byte(nil), (*m.PDUSessionResourceSetupListSURes.List[0].PDUSessionResourceSetupResponseTransfer)...)
+	return buildPDUSessionResourceSetupResponseTransfer(ipv4)
 }
 
 func GetPDUSessionResourceModifyResponseTransfer() []byte {
@@ -536,8 +545,55 @@ func GetHandoverRequiredTransfer() []byte {
 }
 
 func GetSourceToTargetTransparentTransfer(targetGNBID, targetCellID []byte) []byte {
-	m := sampleHandoverRequired().(*ngapMessage.HandoverRequired)
-	return append([]byte(nil), m.SourceToTargetTransparentContainer.Value...)
+	targetCell := append(append([]byte(nil), targetGNBID...), targetCellID...)
+	transfer := &ie.SourceNGRANNodeToTargetNGRANNodeTransparentContainer{
+		RRCContainer: &ie.RRCContainer{Value: aper.OctetString{0x00, 0x00, 0x11}},
+		PDUSessionResourceInformationList: &ie.PDUSessionResourceInformationList{List: []ie.PDUSessionResourceInformationItem{{
+			PDUSessionID: &ie.PDUSessionID{Value: 10},
+			QosFlowInformationList: &ie.QosFlowInformationList{List: []ie.QosFlowInformationItem{{
+				QosFlowIdentifier: &ie.QosFlowIdentifier{Value: 1},
+			}}},
+		}}},
+		TargetCellID: &ie.NGRANCGI{Choice: &ie.NRCGI{
+			PLMNIdentity:   &ie.PLMNIdentity{Value: aper.OctetString{0x02, 0xf8, 0x39}},
+			NRCellIdentity: &ie.NRCellIdentity{Value: aper.BitString{Bytes: targetCell, BitLength: 36}},
+		}},
+		UEHistoryInformation: &ie.UEHistoryInformation{List: []ie.LastVisitedCellItem{{
+			LastVisitedCellInformation: &ie.LastVisitedCellInformation{Choice: &ie.LastVisitedNGRANCellInformation{
+				GlobalCellID: &ie.NGRANCGI{Choice: &ie.NRCGI{
+					PLMNIdentity:   &ie.PLMNIdentity{Value: aper.OctetString{0x02, 0xf8, 0x39}},
+					NRCellIdentity: &ie.NRCellIdentity{Value: aper.BitString{Bytes: []byte{0x00, 0x00, 0x00, 0x00, 0x10}, BitLength: 36}},
+				}},
+				CellType:           &ie.CellType{CellSize: &ie.CellSize{Value: ie.CellSizePresentVerysmall}},
+				TimeUEStayedInCell: &ie.TimeUEStayedInCell{Value: 10},
+			}},
+		}}},
+	}
+	return marshalTransfer(transfer)
+}
+
+func buildPDUSessionResourceSetupResponseTransfer(ipv4 string) []byte {
+	if net.ParseIP(ipv4).To4() == nil {
+		ipv4 = "127.0.0.1"
+	}
+	return marshalTransfer(&ie.PDUSessionResourceSetupResponseTransfer{
+		DLQosFlowPerTNLInformation: qosTNL(ipv4, "\x00\x00\x00\x01", 1),
+	})
+}
+
+func targetRANNodeID(targetGNBID []byte) *ie.TargetID {
+	return &ie.TargetID{Choice: &ie.TargetRANNodeID{
+		GlobalRANNodeID: &ie.GlobalRANNodeID{Choice: &ie.GlobalGNBID{
+			PLMNIdentity: &ie.PLMNIdentity{Value: aper.OctetString{0x02, 0xf8, 0x39}},
+			GNBID: &ie.GNBID{Choice: &ie.GNBIDForGNBID{Value: aper.BitString{
+				Bytes: append([]byte(nil), targetGNBID...), BitLength: uint64(len(targetGNBID) * 8),
+			}}},
+		}},
+		SelectedTAI: &ie.TAI{
+			PLMNIdentity: &ie.PLMNIdentity{Value: aper.OctetString{0x02, 0xf8, 0x39}},
+			TAC:          &ie.TAC{Value: aper.OctetString{0x30, 0x33, 0x99}},
+		},
+	}}
 }
 
 func upTunnel(ip, teid string) *ie.UPTransportLayerInformation {

@@ -23,6 +23,16 @@ const (
 	PDUSesAuthCmp    string = "PDU Session Authentication Complete"
 )
 
+// MobileIdentity5GS decodes the value portion used by the legacy test vectors
+// into the typed IE used by the current NAS API.
+func MobileIdentity5GS(value []byte) *ie.MobileId5GS {
+	mobileIdentity := new(ie.MobileId5GS)
+	if err := mobileIdentity.UnmarshalBinary(value); err != nil {
+		fmt.Printf("decode 5GS mobile identity: %+v\n", err)
+	}
+	return mobileIdentity
+}
+
 // marshal serializes a NAS message, preserving the previous behaviour of
 // printing the error and returning whatever was produced.
 func marshal(m interface{ MarshalBinary() ([]byte, error) }) []byte {
@@ -46,8 +56,8 @@ func newULNASTransport(pduSessionId uint8, payload []byte) *message.ULNASTranspo
 
 // setULNASTransportRouting fills the IEs the AMF needs to route an N1 SM
 // payload to the right SMF: request type, DNN and S-NSSAI.
-func setULNASTransportRouting(m *message.ULNASTransport, requestType uint8, dnnString string, sNssai *models.Snssai) {
-	m.ReqType = &ie.ReqType{Value: ie.ConstReqType(requestType)}
+func setULNASTransportRouting(m *message.ULNASTransport, requestType ie.ConstReqType, dnnString string, sNssai *models.Snssai) {
+	m.ReqType = &ie.ReqType{Value: requestType}
 	if dnnString != "" {
 		m.DNN = &ie.DNN{Value: dnnString}
 	}
@@ -78,10 +88,10 @@ func GetRegistrationRequest(
 			Tsc: ie.SecCtxTypeNative,
 			Ksi: 0x7,
 		},
-		MobileId5GS:     mobileIdentity,
-		UESecCapability: ueSecurityCapability,
-		Capability5GMM:  capability5GMM,
-		ReqNSSAI:        requestedNSSAI,
+		MobileId5GS:      mobileIdentity,
+		UESecCapability:  ueSecurityCapability,
+		Capability5GMM:   capability5GMM,
+		ReqNSSAI:         requestedNSSAI,
 		UplinkDataStatus: uplinkDataStatus,
 	}
 
@@ -118,7 +128,7 @@ func GetPduSessionEstablishmentRequest(pduSessionId uint8) []byte {
 	return marshal(m)
 }
 
-func GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId uint8, requestType uint8, dnnString string,
+func GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId uint8, requestType ie.ConstReqType, dnnString string,
 	sNssai *models.Snssai,
 ) []byte {
 	m := newULNASTransport(pduSessionId, GetPduSessionEstablishmentRequest(pduSessionId))
@@ -126,7 +136,7 @@ func GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId uint8, reques
 	return marshal(m)
 }
 
-func GetUlNasTransport_PduSessionModificationRequest(pduSessionId uint8, requestType uint8, dnnString string,
+func GetUlNasTransport_PduSessionModificationRequest(pduSessionId uint8, requestType ie.ConstReqType, dnnString string,
 	sNssai *models.Snssai,
 ) []byte {
 	m := newULNASTransport(pduSessionId, GetPduSessionModificationRequest(pduSessionId))
@@ -239,13 +249,13 @@ func GetConfigurationUpdateComplete() []byte {
 	return marshal(&message.CfgUpdateComplete{})
 }
 
-func GetServiceRequest(serviceType uint8) []byte {
+func GetServiceRequest(serviceType ie.ConstSvcType) []byte {
 	m := &message.SvcReq{
 		Ngksi: &ie.NASKeySetId{
 			Tsc: ie.SecCtxTypeNative,
 			Ksi: 0x01,
 		},
-		SvcType: &ie.SvcType{Value: ie.ConstSvcType(serviceType)},
+		SvcType: &ie.SvcType{Value: serviceType},
 		TMSI5GS: &ie.MobileId5GS{
 			TypeOfId: ie.IdType_5GS_TMSI,
 			AMFSetID: uint16(0xFE) << 2,
@@ -253,7 +263,7 @@ func GetServiceRequest(serviceType uint8) []byte {
 		},
 	}
 
-	switch ie.ConstSvcType(serviceType) {
+	switch serviceType {
 	case ie.SvcType_MobileTermSvc:
 		m.AllowedPDUSessStatus = &ie.AllowedPDUSessStatus{}
 		setPsiFromBuffer(&m.AllowedPDUSessStatus.Psi, []uint8{0x00, 0x08})
@@ -373,7 +383,7 @@ func GetUlNasTransport_PduSessionReleaseRequest(pduSessionId uint8) []byte {
 	return marshal(newULNASTransport(pduSessionId, GetPduSessionReleaseRequest(pduSessionId)))
 }
 
-func GetUlNasTransport_PduSessionReleaseComplete(pduSessionId uint8, requestType uint8, dnnString string,
+func GetUlNasTransport_PduSessionReleaseComplete(pduSessionId uint8, requestType ie.ConstReqType, dnnString string,
 	sNssai *models.Snssai,
 ) []byte {
 	m := newULNASTransport(pduSessionId, GetPduSessionReleaseComplete(pduSessionId))
