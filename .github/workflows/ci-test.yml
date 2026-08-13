@@ -147,15 +147,20 @@ jobs:
       - name: Build Base Images
         run: |
           cd ${{ env.CI_TEST_DIR }}
+
           make
 
       - name: Check basic compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_IT_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_IT_FILE" down
 
       - name: Run basic tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestRegistration
           ./ci-test-it.sh --build --test TestDeregistration
           ./ci-test-it.sh --build --test TestGUTIRegistration
@@ -173,38 +178,49 @@ jobs:
 
       - name: Run basic non3gpp tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestN3iwf
           ./ci-test-it.sh --build --test TestTngf
 
       - name: Run basic DC tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestDC
           ./ci-test-it.sh --build --test TestDynamicDC
           ./ci-test-it.sh --build --test TestXnDcHandover
 
       - name: Check E2E basic compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" down
 
       - name: Run E2E basic tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-e2e-basic.sh --build --test TestRegPduCharging
 
       - name: Check E2E ULCL compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" down
 
       - name: Run E2E ULCL tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-e2e-ulcl.sh --build --test TestULCLTrafficInfluence
           ./ci-test-e2e-ulcl.sh --build --test TestULCLMultiPathUe
 
       - name: Cleanup docker resources
         if: always()
         run: |
-          echo "Cleaning up docker resources..."
           docker system prune -a -f
           docker volume prune -a -f
 
