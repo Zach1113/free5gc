@@ -15,12 +15,15 @@ env:
   CI_TEST_DIR: ci-test
   CI_TEST_FREE5GC_DIR: free5gc
 
-  CI_TEST_COMPOSE_DIR: composes
-  CI_TEST_COMPOSE_BUILD_DIR: composes/build
+  BUILD_COMPOSE_IT_FILE: composes/build/docker-compose-it.yaml
+  BUILD_COMPOSE_E2E_BASIC_FILE: composes/build/docker-compose-e2e-basic.yaml
+  BUILD_COMPOSE_E2E_ULCL_FILE: composes/build/docker-compose-e2e-ulcl.yaml
 
-  E2E_BASIC_TEST_POOL: "TestRegPduCharging"
+  CI_COMPOSE_IT_FILE: composes/docker-compose-ci-it.yaml
+  CI_COMPOSE_E2E_BASIC_FILE: composes/docker-compose-ci-e2e-basic.yaml
+  CI_COMPOSE_E2E_ULCL_FILE: composes/docker-compose-ci-e2e-ulcl.yaml
 
-  E2E_ULCL_TEST_POOL: "TestULCLTrafficInfluence TestULCLMultiPathUe"
+  TIMEOUT: 300
 
 jobs:
   daily-check:
@@ -35,28 +38,62 @@ jobs:
           curl --version
           jq --version
       
-      - name: Clone free5gc/ci-test
+      - name: Clone ci-test
         run: |
           rm -rf ${{ env.CI_TEST_DIR }}
           git clone ${{ env.CI_TEST_REPO }}
 
-      - name: E2E Basic test
+      - name: Check basic compose
         run: |
-          cd ${{ env.CI_TEST_DIR }}
+          docker compose -f "$CI_COMPOSE_IT_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$CI_COMPOSE_IT_FILE" down
 
-          for test in ${{ env.E2E_BASIC_TEST_POOL }}; do
-            echo "Running test: $test"
-            ./ci-test-e2e-basic.sh --test $test
-          done
-
-      - name: E2E ULCL test
+      - name: Run basic tests
         run: |
-          cd ${{ env.CI_TEST_DIR }}
+          ./ci-test-it.sh --test TestRegistration
+          ./ci-test-it.sh --test TestDeregistration
+          ./ci-test-it.sh --test TestGUTIRegistration
+          ./ci-test-it.sh --test TestEAPAKAPrimeAuthentication
+          ./ci-test-it.sh --test TestDuplicateRegistration
+          ./ci-test-it.sh --test TestServiceRequest
+          ./ci-test-it.sh --test TestPDUSessionReleaseRequest
+          ./ci-test-it.sh --test TestNasReroute
+          ./ci-test-it.sh --test TestN2Handover
+          ./ci-test-it.sh --test TestXnHandover
+          ./ci-test-it.sh --test TestPaging
+          ./ci-test-it.sh --test TestReSynchronization
+          ./ci-test-it.sh --test TestMultiAmfRegistration
+          ./ci-test-it.sh --test TestRequestTwoPDUSessions
 
-          for test in ${{ env.E2E_ULCL_TEST_POOL }}; do
-            echo "Running test: $test"
-            ./ci-test-e2e-ulcl.sh --test $test
-          done
+      - name: Run basic non3gpp tests
+        run: |
+          ./ci-test-it.sh --test TestN3iwf
+          ./ci-test-it.sh --test TestTngf
+
+      - name: Run basic DC tests
+        run: |
+          ./ci-test-it.sh --test TestDC
+          ./ci-test-it.sh --test TestDynamicDC
+          ./ci-test-it.sh --test TestXnDcHandover
+
+      - name: Check E2E basic compose
+        run: |
+          docker compose -f "$CI_COMPOSE_E2E_BASIC_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$CI_COMPOSE_E2E_BASIC_FILE" down
+
+      - name: Run E2E basic tests
+        run: |
+          ./ci-test-e2e-basic.sh --test TestRegPduCharging
+
+      - name: Check E2E ULCL compose
+        run: |
+          docker compose -f "$CI_COMPOSE_E2E_ULCL_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$CI_COMPOSE_E2E_ULCL_FILE" down
+
+      - name: Run E2E ULCL tests
+        run: |
+          ./ci-test-e2e-ulcl.sh --test TestULCLTrafficInfluence
+          ./ci-test-e2e-ulcl.sh --test TestULCLMultiPathUe
 
       - name: Cleanup docker resources
         if: always()
@@ -98,23 +135,57 @@ jobs:
           cd ${{ env.CI_TEST_DIR }}
           make
 
-      - name: E2E Basic test
+      - name: Check compose
         run: |
-          cd ${{ env.CI_TEST_DIR }}
+          docker compose -f "$BUILD_COMPOSE_IT_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$BUILD_COMPOSE_IT_FILE" down
 
-          for test in ${{ env.E2E_BASIC_TEST_POOL }}; do
-            echo "Running test: $test"
-            ./ci-test-e2e-basic.sh --test $test --build
-          done
-
-      - name: E2E ULCL test
+      - name: Run basic tests
         run: |
-          cd ${{ env.CI_TEST_DIR }}
+          ./ci-test-it.sh --build --test TestRegistration
+          ./ci-test-it.sh --build --test TestDeregistration
+          ./ci-test-it.sh --build --test TestGUTIRegistration
+          ./ci-test-it.sh --build --test TestEAPAKAPrimeAuthentication
+          ./ci-test-it.sh --build --test TestDuplicateRegistration
+          ./ci-test-it.sh --build --test TestServiceRequest
+          ./ci-test-it.sh --build --test TestPDUSessionReleaseRequest
+          ./ci-test-it.sh --build --test TestNasReroute
+          ./ci-test-it.sh --build --test TestN2Handover
+          ./ci-test-it.sh --build --test TestXnHandover
+          ./ci-test-it.sh --build --test TestPaging
+          ./ci-test-it.sh --build --test TestReSynchronization
+          ./ci-test-it.sh --build --test TestMultiAmfRegistration
+          ./ci-test-it.sh --build --test TestRequestTwoPDUSessions
 
-          for test in ${{ env.E2E_ULCL_TEST_POOL }}; do
-            echo "Running test: $test"
-            ./ci-test-e2e-ulcl.sh --test $test --build
-          done
+      - name: Run basic non3gpp tests
+        run: |
+          ./ci-test-it.sh --build --test TestN3iwf
+          ./ci-test-it.sh --build --test TestTngf
+
+      - name: Run basic DC tests
+        run: |
+          ./ci-test-it.sh --build --test TestDC
+          ./ci-test-it.sh --build --test TestDynamicDC
+          ./ci-test-it.sh --build --test 
+
+      - name: Check E2E basic compose
+        run: |
+          docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" down
+
+      - name: Run E2E basic tests
+        run: |
+          ./ci-test-e2e-basic.sh --build --test TestRegPduCharging
+
+      - name: Check E2E ULCL compose
+        run: |
+          docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" up -d --wait --wait-timeout "$TIMEOUT"
+          docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" down
+
+      - name: Run E2E ULCL tests
+        run: |
+          ./ci-test-e2e-ulcl.sh --build --test TestULCLTrafficInfluence
+          ./ci-test-e2e-ulcl.sh --build --test TestULCLMultiPathUe
 
       - name: Cleanup docker resources
         if: always()
