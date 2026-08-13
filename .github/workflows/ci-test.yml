@@ -135,7 +135,7 @@ jobs:
           cd ${{ env.CI_TEST_DIR }}
           make
 
-      - name: Check compose
+      - name: Check basic compose
         run: |
           docker compose -f "$BUILD_COMPOSE_IT_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_IT_FILE" down
