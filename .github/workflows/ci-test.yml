@@ -3,9 +3,7 @@ name: CI Test
 on:
   schedule:
     - cron: '14 19 * * *'  # UTC 19:14 (Local 03:14)
-  issue_comment:
-    types: [created] # when user comment "#ci-test" in the PR, the workflow will be triggered
-  # pull_request:
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -26,8 +24,8 @@ env:
   TIMEOUT: 300
 
 jobs:
-  daily-check:
-    name: Daily Check
+  daily:
+    name: Daily
     if: github.event_name == 'schedule'
     # if: github.event_name == 'pull_request'
     runs-on: [self-hosted, linux, x64]
@@ -122,11 +120,9 @@ jobs:
         run: |
           rm -rf ${{ env.CI_TEST_DIR }}
 
-
-  source-code-test:
-    name: Source Code Test
-    if: (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '#ci-test')) || github.event_name == 'workflow_dispatch'
-    # if: github.event_name == 'pull_request'
+  it:
+    name: IT
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Check Command
@@ -140,23 +136,31 @@ jobs:
           rm -rf ${{ env.CI_TEST_DIR }}
           git clone ${{ env.CI_TEST_REPO }}
           cd ${{ env.CI_TEST_DIR }}
-          git clone -j `nproc` --recursive ${{ env.FREE5GC_REPO }}
+          git clone ${{ env.FREE5GC_REPO }}
           cd ${{ env.CI_TEST_FREE5GC_DIR }}
-          git submodule foreach git checkout main
-          git submodule foreach git pull origin main
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-${{ github.event.pull_request.number }}
+            git checkout pr-${{ github.event.pull_request.number }}
+          fi
+          git submodule update --init
 
       - name: Build Base Images
         run: |
           cd ${{ env.CI_TEST_DIR }}
+
           make
 
       - name: Check basic compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_IT_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_IT_FILE" down
 
       - name: Run basic tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestRegistration
           ./ci-test-it.sh --build --test TestDeregistration
           ./ci-test-it.sh --build --test TestGUTIRegistration
@@ -174,38 +178,49 @@ jobs:
 
       - name: Run basic non3gpp tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestN3iwf
           ./ci-test-it.sh --build --test TestTngf
 
       - name: Run basic DC tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-it.sh --build --test TestDC
           ./ci-test-it.sh --build --test TestDynamicDC
           ./ci-test-it.sh --build --test TestXnDcHandover
 
       - name: Check E2E basic compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_E2E_BASIC_FILE" down
 
       - name: Run E2E basic tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-e2e-basic.sh --build --test TestRegPduCharging
 
       - name: Check E2E ULCL compose
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" up -d --wait --wait-timeout "$TIMEOUT"
           docker compose -f "$BUILD_COMPOSE_E2E_ULCL_FILE" down
 
       - name: Run E2E ULCL tests
         run: |
+          cd ${{ env.CI_TEST_DIR }}
+
           ./ci-test-e2e-ulcl.sh --build --test TestULCLTrafficInfluence
           ./ci-test-e2e-ulcl.sh --build --test TestULCLMultiPathUe
 
       - name: Cleanup docker resources
         if: always()
         run: |
-          echo "Cleaning up docker resources..."
           docker system prune -a -f
           docker volume prune -a -f
 
