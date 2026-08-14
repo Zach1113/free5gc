@@ -3,6 +3,7 @@ info:
   description: NRF initial local configuration
 
 configuration:
+  nfInstanceId: 85eb217f-b989-4039-b445-ee5d77dc4ff2 # fixed NRF issuer identity for OAuth tokens
   MongoDBName: free5gc # database name in MongoDB
   MongoDBUrl: mongodb://127.0.0.1:27017 # a valid URL of the mongodb
   sbi: # Service-based interface information

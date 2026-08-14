@@ -19,6 +19,7 @@ configuration:
       key: cert/udm.key # UDM TLS Private key
   nrfUri: http://127.0.0.10:8000 # a valid URI of NRF
   nrfCertPem: cert/nrf.pem # NRF Certificate
+  nrfNfInstanceId: 85eb217f-b989-4039-b445-ee5d77dc4ff2 # trusted NRF OAuth token issuer
 
   # test data set from TS33501-f60 Annex C.4
   SuciProfile: # Home Network Public Key ID = slice index +1
