@@ -1,7 +1,9 @@
 package test_test
 
 import (
-"bytes"
+	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +14,34 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/free5gc/openapi/oauth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testAFInstanceID = "88924b10-60b6-455b-9d41-356c3ee72e1f"
+
+func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
+	t.Helper()
+
+	rootCert, err := oauth.ParseCertFromPEM("../cert/root.pem")
+	require.NoError(t, err)
+	rootPrivateKey, err := oauth.ParsePrivateKeyFromPEM("../cert/root.key")
+	require.NoError(t, err)
+	afPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	certPath := oauth.GetNFCertPath("../cert", "AF", clientNfID)
+	_, err = oauth.GenerateCertificate(
+		"AF", clientNfID, certPath, &afPrivateKey.PublicKey, rootCert, rootPrivateKey,
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := os.Remove(certPath); err != nil && !os.IsNotExist(err) {
+			t.Errorf("remove AF instance certificate: %v", err)
+		}
+	})
+}
 
 func getOAuthToken(t *testing.T, clientNfID, targetNfType, scope string) string {
 	t.Helper()
@@ -73,19 +99,10 @@ func getOAuthToken(t *testing.T, clientNfID, targetNfType, scope string) string 
 
 func TestOAuth2Callback(t *testing.T) {
 	t.Log("[TestOAuth2Callback] Running in STRICT OAuth2 mode.")
-	
-	if _, err := os.Stat("../cert/af.pem"); os.IsNotExist(err) {
-		t.Log("[Setup] Copying nef.pem to af.pem for NRF verification...")
-		certData, err := os.ReadFile("../cert/nef.pem")
-		if err == nil {
-			_ = os.WriteFile("../cert/af.pem", certData, 0644)
-		} else {
-			t.Logf("[Warning] Failed to read nef.pem: %v", err)
-		}
-	}
 
-	clientNfID := uuid.New().String()
-	t.Logf("[TestOAuth2Callback] Using dynamic AF Instance ID: %s", clientNfID)
+	clientNfID := testAFInstanceID
+	prepareAFInstanceCertificate(t, clientNfID)
+	t.Logf("[TestOAuth2Callback] Using fixed AF Instance ID: %s", clientNfID)
 
 	var afCallCount int64
 	afMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

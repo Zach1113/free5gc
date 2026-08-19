@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"test/app"
 	"time"
 
@@ -41,7 +42,18 @@ const (
 	TestCN                          TestId = "TestCN"
 	TestAFInfluenceOnTrafficRouting TestId = "TestAFInfluenceOnTrafficRouting"
 	TestRequestTwoPDUSessions       TestId = "TestRequestTwoPDUSessions"
+	TestOAuth2Callback              TestId = "TestOAuth2Callback"
+	testNrfInstanceID                      = "85eb217f-b989-4039-b445-ee5d77dc4ff2"
 )
+
+func (id TestId) Matches(testID TestId) bool {
+	if id == "" {
+		return false
+	}
+
+	testPattern, err := regexp.Compile(string(id))
+	return err == nil && testPattern.MatchString(string(testID))
+}
 
 type StartNFsConfig struct {
 	Nrf  bool `yaml:"nrf,omitempty" default:"false"`
@@ -144,6 +156,12 @@ func NewSmfStruct(ctx context.Context, testId TestId) app.NFstruct {
 	}
 	smf_ctx, smf_cancel := context.WithCancel(ctx)
 	pfcpStart, pfcpTerminate := smf_utils.InitPFCPFunc(ctx)
+	if testId.Matches(TestOAuth2Callback) {
+		// This test exercises only SBI/OAuth callbacks and does not require a UPF.
+		// Avoid depending on the test network namespace for the PFCP listener.
+		pfcpStart = func(*smf_service.SmfApp) {}
+		pfcpTerminate = func() {}
+	}
 	smfApp, errApp := smf_service.NewApp(smf_ctx, smf_factory.SmfConfig, "", pfcpStart, pfcpTerminate)
 	if errApp != nil {
 		fmt.Printf("SMF NewApp failed: %v\n", errApp)
@@ -283,8 +301,9 @@ func nrfConfig(oauth bool) error {
 			Description: "NRF initial test configuration",
 		},
 		Configuration: &nrf_factory.Configuration{
-			MongoDBName: "free5gc",
-			MongoDBUrl:  "mongodb://127.0.0.1:27017",
+			NfInstanceId: testNrfInstanceID,
+			MongoDBName:  "free5gc",
+			MongoDBUrl:   "mongodb://127.0.0.1:27017",
 			Sbi: &nrf_factory.Sbi{
 				Scheme:       "http",
 				RegisterIPv4: "127.0.0.10",
@@ -398,8 +417,9 @@ func amfConfig(testID TestId) error {
 			SupportDnnList: []string{
 				"internet",
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			Security: &amf_factory.Security{
 				IntegrityOrder: integrityOrder,
 				CipheringOrder: cipheringOrder,
@@ -615,10 +635,11 @@ func smfConfig(testID TestId) error {
 				ExpireTime:    5 * time.Second,
 				MaxRetryTimes: 2,
 			},
-			NrfUri:       "http://127.0.0.10:8000",
-			NrfCertPem:   "../cert/nrf.pem",
-			UrrPeriod:    30,
-			UrrThreshold: 10000,
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
+			UrrPeriod:       30,
+			UrrThreshold:    10000,
 			PLMNList: []smf_factory.PlmnID{
 				{
 					Mcc: "208",
@@ -767,8 +788,9 @@ func udrConfig() error {
 				Name: "free5gc",
 				Url:  "mongodb://localhost:27017",
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 		},
 		Logger: &udr_factory.Logger{
 			Enable:       true,
@@ -805,6 +827,7 @@ func pcfConfig() error {
 			TimeFormat:      "2019-01-02 15:04:05",
 			DefaultBdtRefId: "BdtPolicyId-",
 			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
 			NrfCertPem:      "../cert/nrf.pem",
 			ServiceList: []pcf_factory.Service{{
 				ServiceName: "npcf-am-policy-control",
@@ -867,8 +890,9 @@ func udmConfig() error {
 					Key: "cert/udm.key",
 				},
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			SuciProfiles: []suci.SuciProfile{
 				{
 					ProtectionScheme: "1", // Protect Scheme: Profile A
@@ -920,8 +944,9 @@ func nssfConfig() error {
 				"nnssf-nsselection",
 				"nnssf-nssaiavailability",
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			SupportedPlmnList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1409,8 +1434,9 @@ func ausfConfig() error {
 			ServiceNameList: []string{
 				"nausf-auth",
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			PlmnSupportList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1485,8 +1511,9 @@ func chfConfig() error {
 					Key: "../cert/chf.key",
 				},
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			ServiceNameList: []string{
 				"nchf-convergedcharging",
 			},
@@ -1545,10 +1572,10 @@ type nefAppWrapper struct {
 	inner *nef_service.NefApp
 }
 
-func (w *nefAppWrapper) SetLogEnable(enable bool)        { w.inner.SetLogEnable(enable) }
-func (w *nefAppWrapper) SetLogLevel(level string)        { w.inner.SetLogLevel(level) }
+func (w *nefAppWrapper) SetLogEnable(enable bool)          { w.inner.SetLogEnable(enable) }
+func (w *nefAppWrapper) SetLogLevel(level string)          { w.inner.SetLogLevel(level) }
 func (w *nefAppWrapper) SetReportCaller(reportCaller bool) { w.inner.SetReportCaller(reportCaller) }
-func (w *nefAppWrapper) Terminate()                      { w.inner.Terminate() }
+func (w *nefAppWrapper) Terminate()                        { w.inner.Terminate() }
 func (w *nefAppWrapper) Start() {
 	if err := w.inner.Start(); err != nil {
 		fmt.Printf("NEF Start() returned error: %v\n", err)
@@ -1589,8 +1616,9 @@ func nefConfig() (*nef_factory.Config, error) {
 				BindingIPv4:  "127.0.0.5",
 				Port:         8000,
 			},
-			NrfUri:     "http://127.0.0.10:8000",
-			NrfCertPem: "../cert/nrf.pem",
+			NrfUri:          "http://127.0.0.10:8000",
+			NrfNfInstanceId: testNrfInstanceID,
+			NrfCertPem:      "../cert/nrf.pem",
 			ServiceList: []nef_factory.Service{
 				{ServiceName: nef_factory.ServiceNefCallback},
 				{ServiceName: nef_factory.ServiceTraffInflu},

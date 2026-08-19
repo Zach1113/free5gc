@@ -58,6 +58,9 @@ func init() {
 			initNfCfg.OAuth = true
 		}
 	}
+	if initNfCfg.TestId.Matches(test.TestOAuth2Callback) {
+		initNfCfg.OAuth = true
+	}
 	fmt.Println("os.Args:", os.Args)
 
 	switch initFlag {
