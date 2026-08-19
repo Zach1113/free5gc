@@ -9,7 +9,7 @@ require (
 	github.com/free5gc/amf v0.0.0
 	github.com/free5gc/ausf v0.0.0
 	github.com/free5gc/bsf v0.0.0
-	github.com/free5gc/chf v1.2.2
+	github.com/free5gc/chf v1.2.6-0.20260819160712-4e06244b5612
 	github.com/free5gc/ike v1.2.1
 	github.com/free5gc/nas v1.3.0
 	github.com/free5gc/nef v1.2.4
@@ -19,7 +19,7 @@ require (
 	github.com/free5gc/openapi v1.3.0
 	github.com/free5gc/pcf v0.0.0
 	github.com/free5gc/sctp v1.2.0
-	github.com/free5gc/smf v1.4.3
+	github.com/free5gc/smf v1.4.6-0.20260819160737-dd94a6c43508
 	github.com/free5gc/tngf v0.0.0-00010101000000-000000000000
 	github.com/free5gc/udm v0.0.0
 	github.com/free5gc/udr v0.0.0
