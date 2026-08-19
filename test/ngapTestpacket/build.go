@@ -45,7 +45,7 @@ func BuildNGSetupRequest() ngapMessage.Message {
 			BroadcastPLMNList: &ie.BroadcastPLMNList{List: []ie.BroadcastPLMNItem{{
 				PLMNIdentity: &ie.PLMNIdentity{Value: aper.OctetString{0x02, 0xf8, 0x39}},
 				TAISliceSupportList: &ie.SliceSupportList{List: []ie.SliceSupportItem{{
-					SNSSAI: &ie.SNSSAI{SST: &ie.SST{Value: aper.OctetString{0x01}}, SD: &ie.SD{Value: aper.OctetString{0x01, 0x02, 0x03}}},
+					SNSSAI: &ie.SNSSAI{SST: &ie.SST{Value: aper.OctetString{0x01}}, SD: &ie.SD{Value: aper.OctetString{0x11, 0x22, 0x33}}},
 				}}},
 			}}},
 		}}},
@@ -656,6 +656,12 @@ func BuildPathSwitchRequestWithDC(
 	pduSessionID, amfUeNgapID, ranUeNgapID int64, masterIP, masterTEID, secondaryIP, secondaryTEID string,
 ) ngapMessage.Message {
 	m := BuildPathSwitchRequest(amfUeNgapID, ranUeNgapID).(*ngapMessage.PathSwitchRequest)
+	// The path switch is reported by the secondary RAN (nGsSetup registers it with
+	// TAC 0x000011), not the master RAN's TAC the base sample defaults to - override
+	// it so the target TAI actually matches a TAC the AMF knows this RAN supports.
+	if uliNR, ok := m.UserLocationInformation.Choice.(*ie.UserLocationInformationNR); ok && uliNR.TAI != nil {
+		uliNR.TAI.TAC = &ie.TAC{Value: aper.OctetString{0x00, 0x00, 0x11}}
+	}
 	transfer := &ie.PathSwitchRequestTransfer{
 		DLNGUUPTNLInformation: upTunnel(masterIP, masterTEID),
 		QosFlowAcceptedList: &ie.QosFlowAcceptedList{List: []ie.QosFlowAcceptedItem{{

@@ -328,7 +328,7 @@ func ueRanEmulator() error {
 		Sd:  uerancfg.Snssai.Sd,
 	}
 	pdu = nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(
-		10, uint8(ie.ReqType_InitialReq), "internet", &sNssai)
+		10, ie.ReqType_InitialReq, "internet", &sNssai)
 	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, message.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		return err

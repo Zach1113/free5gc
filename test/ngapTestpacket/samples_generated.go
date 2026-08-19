@@ -700,7 +700,7 @@ func sampleNGSetupRequest() ngapMessage.Message {
 												},
 												SD: &ie.SD{
 													Value: aper.OctetString{
-														0x01, 0x02, 0x03,
+														0x11, 0x22, 0x33,
 													},
 												},
 												IEExtensions: nil,
