@@ -7,24 +7,23 @@ require (
 	github.com/calee0219/fatal v0.0.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/amf v0.0.0
-	github.com/free5gc/aper v1.1.1
 	github.com/free5gc/ausf v0.0.0
 	github.com/free5gc/bsf v0.0.0
-	github.com/free5gc/chf v1.2.2
+	github.com/free5gc/chf v1.2.6-0.20260819160712-4e06244b5612
 	github.com/free5gc/ike v1.2.1
-	github.com/free5gc/nas v1.2.4-0.20260707010827-03622ac0336e
+	github.com/free5gc/nas v1.3.0
 	github.com/free5gc/nef v1.2.4
-	github.com/free5gc/ngap v1.1.3
+	github.com/free5gc/ngap v1.2.0
 	github.com/free5gc/nrf v0.0.0
 	github.com/free5gc/nssf v0.0.0
-	github.com/free5gc/openapi v1.2.5-0.20260527003827-02dc71b4d94f
+	github.com/free5gc/openapi v1.3.0
 	github.com/free5gc/pcf v0.0.0
-	github.com/free5gc/sctp v1.1.2
-	github.com/free5gc/smf v1.4.3
+	github.com/free5gc/sctp v1.2.0
+	github.com/free5gc/smf v1.4.6-0.20260819160737-dd94a6c43508
 	github.com/free5gc/tngf v0.0.0-00010101000000-000000000000
 	github.com/free5gc/udm v0.0.0
 	github.com/free5gc/udr v0.0.0
-	github.com/free5gc/util v1.3.2
+	github.com/free5gc/util v1.4.0
 	github.com/free5gc/webconsole v0.0.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-ping/ping v1.1.0

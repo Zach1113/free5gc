@@ -23,7 +23,7 @@ import (
 	"github.com/free5gc/ike"
 	"github.com/free5gc/ike/message"
 	ike_security "github.com/free5gc/ike/security"
-	"github.com/free5gc/ngap/ngapType"
+	ngapIE "github.com/free5gc/ngap/ie"
 
 	eap "github.com/free5gc/ike/eap"
 	ike_message "github.com/free5gc/ike/message"
@@ -31,12 +31,9 @@ import (
 	"github.com/free5gc/ike/security/encr"
 	"github.com/free5gc/ike/security/integ"
 	"github.com/free5gc/ike/security/prf"
-
-	"github.com/free5gc/nas"
-	"github.com/free5gc/nas/nasMessage"
-	"github.com/free5gc/nas/nasType"
-	nasSecurity "github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
+	nasIE "github.com/free5gc/nas/ie"
+	nasMessage "github.com/free5gc/nas/message"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/ueauth"
 )
@@ -86,7 +83,7 @@ type N3IWFRanUe struct {
 	IPAddrv4     string
 	IPAddrv6     string
 	PortNumber   int32
-	MaskedIMEISV *ngapType.MaskedIMEISV // TS 38.413 9.3.1.54
+	MaskedIMEISV *ngapIE.MaskedIMEISV // TS 38.413 9.3.1.54
 	Guti         string
 
 	// UE send CREATE_CHILD_SA response
@@ -100,15 +97,15 @@ type N3IWFRanUe struct {
 	TCPConnection net.Conn
 
 	/* Others */
-	Guami                            *ngapType.GUAMI
+	Guami                            *ngapIE.GUAMI
 	IndexToRfsp                      int64
-	Ambr                             *ngapType.UEAggregateMaximumBitRate
-	AllowedNssai                     *ngapType.AllowedNSSAI
-	RadioCapability                  *ngapType.UERadioCapability                // TODO: This is for RRC, can be deleted
-	CoreNetworkAssistanceInformation *ngapType.CoreNetworkAssistanceInformation // TS 38.413 9.3.1.15
+	Ambr                             *ngapIE.UEAggregateMaximumBitRate
+	AllowedNssai                     *ngapIE.AllowedNSSAI
+	RadioCapability                  *ngapIE.UERadioCapability                           // TODO: This is for RRC, can be deleted
+	CoreNetworkAssistanceInformation *ngapIE.CoreNetworkAssistanceInformationForInactive // TS 38.413 9.3.1.15
 	IMSVoiceSupported                int32
 	RRCEstablishmentCause            int16
-	PduSessionReleaseList            ngapType.PDUSessionResourceReleasedListRelRes
+	PduSessionReleaseList            ngapIE.PDUSessionResourceReleasedListRelRes
 }
 
 type IKESecurityAssociation struct {
@@ -293,15 +290,15 @@ func setupGreTunnel(greIfaceName, parentIfaceName string, ueTunnelAddr, n3iwfTun
 	return linkGRE, nil
 }
 
-func getAuthSubscription() (authSubs models.AuthenticationSubscription) {
+func getAuthSubscription() (authSubs models.Udr_DR_AuthenticationSubscription) {
 	authSubs.EncPermanentKey = TestGenAuthData.MilenageTestSet19.K
 	authSubs.EncOpcKey = TestGenAuthData.MilenageTestSet19.OPC
 	authSubs.AuthenticationManagementField = "8000"
 
-	authSubs.SequenceNumber = &models.SequenceNumber{
+	authSubs.SequenceNumber = &models.Udr_DR_SequenceNumber{
 		Sqn: TestGenAuthData.MilenageTestSet19.SQN,
 	}
-	authSubs.AuthenticationMethod = models.AuthMethod__5_G_AKA
+	authSubs.AuthenticationMethod = models.Udr_DR_AuthMethod_5_G_AKA
 	return
 }
 
@@ -628,8 +625,8 @@ func sendPduSessionEstablishmentRequest(
 
 	// PDU session establishment request
 	// TS 24.501 9.11.3.47.1 Request type
-	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId, nasMessage.ULNASTransportRequestTypeInitialRequest, "internet", &sNssai)
-	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId, nasIE.ReqType_InitialReq, "internet", &sNssai)
+	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		return ifaces, fmt.Errorf("Encode NAS PDU In Envelope Fail:%+v", err)
 	}
@@ -831,7 +828,7 @@ func sendPduSessionEstablishmentRequest(
 		nasStr := spew.Sdump(nasMsg)
 		t.Log("Dump DecodePDUSessionEstablishmentAccept:\n", nasStr)
 
-		pduAddr, err = GetPDUAddress(nasMsg.PDUSessionEstablishmentAccept)
+		pduAddr, err = GetPDUAddress(nasMsg)
 		if err != nil {
 			t.Errorf("GetPDUAddress Fail: %+v", err)
 		}
@@ -854,14 +851,11 @@ func sendPduSessionEstablishmentRequest(
 
 func TestNon3GPPUE(t *testing.T) {
 	// New UE
-	ue := NewRanUeContext("imsi-208930000007487", 1, nasSecurity.AlgCiphering128NEA0, nasSecurity.AlgIntegrity128NIA2,
+	ue := NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA0, nasMessage.AlgIntegrity128NIA2,
 		models.AccessType_NON_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = getAuthSubscription()
-	mobileIdentity5GS := nasType.MobileIdentity5GS{
-		Len:    13, // suci
-		Buffer: []uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78},
-	}
+	mobileIdentity5GS := nasTestpacket.MobileIdentity5GS([]uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78})
 
 	// Used to save IPsec/IKE related data
 	n3ue := new(N3IWFUe)
@@ -1097,7 +1091,7 @@ func TestNon3GPPUE(t *testing.T) {
 
 	// NAS
 	ueSecurityCapability := ue.GetUESecurityCapability()
-	registrationRequest := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
+	registrationRequest := nasTestpacket.GetRegistrationRequest(nasIE.RegType_InitialReg,
 		mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
 
 	nasLength := make([]byte, 2)
@@ -1149,8 +1143,6 @@ func TestNon3GPPUE(t *testing.T) {
 		t.Fatalf("Received packet is not an EAP payload")
 	}
 
-	var decodedNAS *nas.Message
-
 	eapExpanded, ok = eapReq.EapTypeData.(*eap.EapExpanded)
 	if !ok {
 		t.Fatalf("The EAP data is not an EAP expended.")
@@ -1158,14 +1150,14 @@ func TestNon3GPPUE(t *testing.T) {
 
 	// Decode NAS - Authentication Request
 	nasData := eapExpanded.VendorData[4:]
-	decodedNAS = new(nas.Message)
-	if err := decodedNAS.PlainNasDecode(&nasData); err != nil {
+	decodedNAS, err := nasMessage.ParseGMM(nasData)
+	if err != nil {
 		t.Fatalf("Decode plain NAS fail: %+v", err)
 	}
 
 	// Calculate for RES*
 	assert.NotNil(t, decodedNAS)
-	rand := decodedNAS.GetRANDValue()
+	rand := decodedNAS.(*nasMessage.AuthReq).AuthParamRAND5GAuthChlg.Rand
 	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand[:], "5G:mnc093.mcc208.3gppnetwork.org")
 
 	// send NAS Authentication Response
@@ -1235,10 +1227,10 @@ func TestNon3GPPUE(t *testing.T) {
 	nasData = eapExpanded.VendorData[4:]
 
 	// Send NAS Security Mode Complete Msg
-	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
+	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasIE.RegType_InitialReg,
 		mobileIdentity5GS, nil, ueSecurityCapability, ue.Get5GMMCapability(), nil, nil)
 	pdu = nasTestpacket.GetSecurityModeComplete(registrationRequestWith5GMM)
-	pdu, err = EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCipheredWithNew5gNasSecurityContext, true, true)
+	pdu, err = EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCipheredWithNew5gNasSecCtx, true, true)
 	assert.Nil(t, err)
 
 	// IKE_AUTH - EAP exchange
@@ -1313,7 +1305,7 @@ func TestNon3GPPUE(t *testing.T) {
 	P0 := make([]byte, 4)
 	binary.BigEndian.PutUint32(P0, ue.ULCount.Get()-1)
 	L0 := ueauth.KDFLen(P0)
-	P1 := []byte{nasSecurity.AccessTypeNon3GPP}
+	P1 := []byte{byte(nasMessage.AccessTypeNon3GPP)}
 	L1 := ueauth.KDFLen(P1)
 
 	Kn3iwf, err := ueauth.GetKDFValue(ue.Kamf, ueauth.FC_FOR_KGNB_KN3IWF_DERIVATION, P0, L0, P1, L1)
@@ -1490,7 +1482,7 @@ func TestNon3GPPUE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nasMsg, err := NASDecode(ue, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, nasEnv[:n])
+	nasMsg, err := NASDecode(ue, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, nasEnv[:n])
 	if err != nil {
 		t.Fatalf("NAS Decode Fail: %+v", err)
 	}
@@ -1501,7 +1493,7 @@ func TestNon3GPPUE(t *testing.T) {
 
 	// send NAS Registration Complete Msg
 	pdu = nasTestpacket.GetRegistrationComplete(nil)
-	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -1522,8 +1514,8 @@ func TestNon3GPPUE(t *testing.T) {
 
 	var pduSessionId uint8 = 1
 
-	pdu = nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId, nasMessage.ULNASTransportRequestTypeInitialRequest, "internet", &sNssai)
-	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu = nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(pduSessionId, nasIE.ReqType_InitialReq, "internet", &sNssai)
+	pdu, err = EncodeNasPduInEnvelopeWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -1659,7 +1651,7 @@ func TestNon3GPPUE(t *testing.T) {
 	// We don't check any of message in UeConfigUpdate Message
 	if n, err := tcpConnWithN3IWF.Read(buffer); err != nil {
 		t.Fatalf("No UeConfigUpdate Message: %+v", err)
-		_, err := ngap.Decoder(buffer[2:n])
+		_, err := ngapMessage.Parse(buffer[2:n])
 		if err != nil {
 			t.Fatalf("UeConfigUpdate Decode Error: %+v", err)
 		}
@@ -1679,7 +1671,7 @@ func TestNon3GPPUE(t *testing.T) {
 		spew.Config.Indent = "\t"
 		nasStr := spew.Sdump(nasMsg)
 		t.Log("Dump DecodePDUSessionEstablishmentAccept:\n", nasStr)
-		pduAddress, err = GetPDUAddress(nasMsg.PDUSessionEstablishmentAccept)
+		pduAddress, err = GetPDUAddress(nasMsg)
 		if err != nil {
 			t.Fatalf("GetPDUAddress Fail: %+v", err)
 		}
@@ -1774,34 +1766,8 @@ func TestNon3GPPUE(t *testing.T) {
 	}
 }
 
-func setUESecurityCapability(ue *RanUeContext) (UESecurityCapability *nasType.UESecurityCapability) {
-	UESecurityCapability = &nasType.UESecurityCapability{
-		Iei:    nasMessage.RegistrationRequestUESecurityCapabilityType,
-		Len:    8,
-		Buffer: []uint8{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-	}
-	switch ue.CipheringAlg {
-	case nasSecurity.AlgCiphering128NEA0:
-		UESecurityCapability.SetEA0_5G(1)
-	case nasSecurity.AlgCiphering128NEA1:
-		UESecurityCapability.SetEA1_128_5G(1)
-	case nasSecurity.AlgCiphering128NEA2:
-		UESecurityCapability.SetEA2_128_5G(1)
-	case nasSecurity.AlgCiphering128NEA3:
-		UESecurityCapability.SetEA3_128_5G(1)
-	}
-
-	switch ue.IntegrityAlg {
-	case nasSecurity.AlgIntegrity128NIA0:
-		UESecurityCapability.SetIA0_5G(1)
-	case nasSecurity.AlgIntegrity128NIA1:
-		UESecurityCapability.SetIA1_128_5G(1)
-	case nasSecurity.AlgIntegrity128NIA2:
-		UESecurityCapability.SetIA2_128_5G(1)
-	case nasSecurity.AlgIntegrity128NIA3:
-		UESecurityCapability.SetIA3_128_5G(1)
-	}
-	return
+func setUESecurityCapability(ue *RanUeContext) *nasIE.UESecCapability {
+	return ue.GetUESecurityCapability()
 }
 
 func (ikeUe *N3IWFIkeUe) CreateHalfChildSA(msgID, inboundSPI uint32, pduSessionID int64) {
