@@ -39,9 +39,9 @@ func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
 	afPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	certPath := oauth.GetNFCertPath(certDir, string(models.NrfNfManagementNfType_AF), clientNfID)
+	certPath := oauth.GetNFCertPath(certDir, string(models.Nrf_NFMgmt_NFType_AF), clientNfID)
 	_, err = oauth.GenerateCertificate(
-		string(models.NrfNfManagementNfType_AF), clientNfID, certPath,
+		string(models.Nrf_NFMgmt_NFType_AF), clientNfID, certPath,
 		&afPrivateKey.PublicKey, rootCert, rootPrivateKey,
 	)
 	require.NoError(t, err)
@@ -50,24 +50,24 @@ func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
 func registerTestNF(
 	t *testing.T,
 	clientNfID string,
-	clientNfType models.NrfNfManagementNfType,
-	serviceName models.ServiceName,
+	clientNfType models.Nrf_NFMgmt_NFType,
+	serviceName models.Nrf_NFMgmt_ServiceName,
 ) {
 	t.Helper()
 
-	nfProfile := models.NrfNfManagementNfProfile{
+	nfProfile := models.Nrf_NFMgmt_NFProfile{
 		NfInstanceId: clientNfID,
 		NfType:       clientNfType,
-		NfStatus:     models.NrfNfManagementNfStatus_REGISTERED,
-		NfServices: []models.NrfNfManagementNfService{{
+		NfStatus:     models.Nrf_NFMgmt_NFStatus_REGISTERED,
+		NfServices: []models.Nrf_NFMgmt_NFService{{
 			ServiceInstanceId: "1",
 			ServiceName:       serviceName,
-			Versions: []models.NfServiceVersion{{
+			Versions: []models.Nrf_NFMgmt_NFServiceVersion{{
 				ApiVersionInUri: "v1",
 				ApiFullVersion:  "1.0.0",
 			}},
 			Scheme:          models.UriScheme_HTTP,
-			NfServiceStatus: models.NfServiceStatus_REGISTERED,
+			NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
 		}},
 	}
 	b, err := json.Marshal(nfProfile)
@@ -85,10 +85,10 @@ func registerTestNF(
 func requestOAuthToken(
 	t *testing.T,
 	clientNfID string,
-	clientNfType models.NrfNfManagementNfType,
-	targetNfType models.NrfNfManagementNfType,
+	clientNfType models.Nrf_NFMgmt_NFType,
+	targetNfType models.Nrf_NFMgmt_NFType,
 	targetNfInstanceID string,
-	scope models.ServiceName,
+	scope models.Nrf_NFMgmt_ServiceName,
 ) (int, oauthTokenResponse) {
 	t.Helper()
 
@@ -116,10 +116,10 @@ func requestOAuthToken(
 func requireOAuthToken(
 	t *testing.T,
 	clientNfID string,
-	clientNfType models.NrfNfManagementNfType,
-	targetNfType models.NrfNfManagementNfType,
+	clientNfType models.Nrf_NFMgmt_NFType,
+	targetNfType models.Nrf_NFMgmt_NFType,
 	targetNfInstanceID string,
-	scope models.ServiceName,
+	scope models.Nrf_NFMgmt_ServiceName,
 ) string {
 	t.Helper()
 
@@ -131,7 +131,7 @@ func requireOAuthToken(
 	return result.AccessToken
 }
 
-func nfInstanceID(t *testing.T, nfType models.NrfNfManagementNfType) string {
+func nfInstanceID(t *testing.T, nfType models.Nrf_NFMgmt_NFType) string {
 	t.Helper()
 	id, ok := test.GetNFInstanceID(nfType)
 	require.True(t, ok, "test NF %s is not configured", nfType)
@@ -158,7 +158,7 @@ func TestOAuth2Callback(t *testing.T) {
 
 	clientNfID := testAFInstanceID
 	prepareAFInstanceCertificate(t, clientNfID)
-	registerTestNF(t, clientNfID, models.NrfNfManagementNfType_AF, models.ServiceName("nnef-callback"))
+	registerTestNF(t, clientNfID, models.Nrf_NFMgmt_NFType_AF, models.Nrf_NFMgmt_ServiceName("nnef-callback"))
 	t.Logf("[TestOAuth2Callback] Using fixed AF Instance ID: %s", clientNfID)
 
 	var afCallCount int64
@@ -194,9 +194,9 @@ func TestOAuth2Callback(t *testing.T) {
 	reqSub, _ := http.NewRequest(http.MethodPost, subReqURL, bytes.NewReader(subBodyJSON))
 	reqSub.Header.Set("Content-Type", "application/json")
 	reqSub.Header.Set("Authorization", "Bearer "+requireOAuthToken(
-		t, clientNfID, models.NrfNfManagementNfType_AF,
-		models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
-		models.ServiceName("3gpp-traffic-influence"),
+		t, clientNfID, models.Nrf_NFMgmt_NFType_AF,
+		models.Nrf_NFMgmt_NFType_NEF, nfInstanceID(t, models.Nrf_NFMgmt_NFType_NEF),
+		models.Nrf_NFMgmt_ServiceName("3gpp-traffic-influence"),
 	))
 
 	subResp, err := http.DefaultClient.Do(reqSub)
@@ -218,9 +218,9 @@ func TestOAuth2Callback(t *testing.T) {
 	reqNotif, _ := http.NewRequest(http.MethodPost, callbackURL, bytes.NewReader(notifBody))
 	reqNotif.Header.Set("Content-Type", "application/json")
 	reqNotif.Header.Set("Authorization", "Bearer "+requireOAuthToken(
-		t, nfInstanceID(t, models.NrfNfManagementNfType_SMF), models.NrfNfManagementNfType_SMF,
-		models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
-		models.ServiceName("nnef-callback"),
+		t, nfInstanceID(t, models.Nrf_NFMgmt_NFType_SMF), models.Nrf_NFMgmt_NFType_SMF,
+		models.Nrf_NFMgmt_NFType_NEF, nfInstanceID(t, models.Nrf_NFMgmt_NFType_NEF),
+		models.Nrf_NFMgmt_ServiceName("nnef-callback"),
 	))
 
 	notifResp, err := http.DefaultClient.Do(reqNotif)
@@ -236,9 +236,9 @@ func TestOAuth2Callback(t *testing.T) {
 	if loc != "" {
 		delReq, _ := http.NewRequest(http.MethodDelete, loc, nil)
 		delReq.Header.Set("Authorization", "Bearer "+requireOAuthToken(
-			t, clientNfID, models.NrfNfManagementNfType_AF,
-			models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
-			models.ServiceName("3gpp-traffic-influence"),
+			t, clientNfID, models.Nrf_NFMgmt_NFType_AF,
+			models.Nrf_NFMgmt_NFType_NEF, nfInstanceID(t, models.Nrf_NFMgmt_NFType_NEF),
+			models.Nrf_NFMgmt_ServiceName("3gpp-traffic-influence"),
 		))
 		delResp, err := http.DefaultClient.Do(delReq)
 		if err == nil {
@@ -249,35 +249,35 @@ func TestOAuth2Callback(t *testing.T) {
 
 	callbackCases := []struct {
 		name           string
-		consumerType   models.NrfNfManagementNfType
-		targetType     models.NrfNfManagementNfType
-		scope          models.ServiceName
+		consumerType   models.Nrf_NFMgmt_NFType
+		targetType     models.Nrf_NFMgmt_NFType
+		scope          models.Nrf_NFMgmt_ServiceName
 		method         string
 		callbackURL    string
 		body           []byte
 		expectedStatus int
 	}{
 		{
-			name: "PCF to AMF", consumerType: models.NrfNfManagementNfType_PCF,
-			targetType: models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			name: "PCF to AMF", consumerType: models.Nrf_NFMgmt_NFType_PCF,
+			targetType: models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
 			method: http.MethodGet, callbackURL: "http://127.0.0.18:8000/namf-callback/v1/",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "UDM to AMF", consumerType: models.NrfNfManagementNfType_UDM,
-			targetType: models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			name: "UDM to AMF", consumerType: models.Nrf_NFMgmt_NFType_UDM,
+			targetType: models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
 			method: http.MethodGet, callbackURL: "http://127.0.0.18:8000/namf-callback/v1/",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "AMF to PCF", consumerType: models.NrfNfManagementNfType_AMF,
-			targetType: models.NrfNfManagementNfType_PCF, scope: models.ServiceName("npcf-callback"),
+			name: "AMF to PCF", consumerType: models.Nrf_NFMgmt_NFType_AMF,
+			targetType: models.Nrf_NFMgmt_NFType_PCF, scope: models.Nrf_NFMgmt_ServiceName("npcf-callback"),
 			method: http.MethodPost, callbackURL: "http://127.0.0.7:8000/npcf-callback/v1/amfstatus",
 			body: []byte(`{}`), expectedStatus: http.StatusNoContent,
 		},
 		{
-			name: "UDR to PCF", consumerType: models.NrfNfManagementNfType_UDR,
-			targetType: models.NrfNfManagementNfType_PCF, scope: models.ServiceName("npcf-callback"),
+			name: "UDR to PCF", consumerType: models.Nrf_NFMgmt_NFType_UDR,
+			targetType: models.Nrf_NFMgmt_NFType_PCF, scope: models.Nrf_NFMgmt_ServiceName("npcf-callback"),
 			method:      http.MethodPost,
 			callbackURL: "http://127.0.0.7:8000/npcf-callback/v1/nudr-notify/policy-data/imsi-test",
 			body:        []byte(`{}`), expectedStatus: http.StatusNotImplemented,
@@ -298,29 +298,29 @@ func TestOAuth2Callback(t *testing.T) {
 	rejectedRequests := []struct {
 		name         string
 		consumerID   string
-		consumerType models.NrfNfManagementNfType
-		targetType   models.NrfNfManagementNfType
-		scope        models.ServiceName
+		consumerType models.Nrf_NFMgmt_NFType
+		targetType   models.Nrf_NFMgmt_NFType
+		scope        models.Nrf_NFMgmt_ServiceName
 	}{
 		{
 			name: "AF cannot call AMF callback", consumerID: clientNfID,
-			consumerType: models.NrfNfManagementNfType_AF,
-			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			consumerType: models.Nrf_NFMgmt_NFType_AF,
+			targetType:   models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
 		},
 		{
 			name:         "AUSF cannot call AMF callback",
-			consumerType: models.NrfNfManagementNfType_AUSF,
-			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			consumerType: models.Nrf_NFMgmt_NFType_AUSF,
+			targetType:   models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
 		},
 		{
 			name:         "callback scope with wrong target",
-			consumerType: models.NrfNfManagementNfType_AMF,
-			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("npcf-callback"),
+			consumerType: models.Nrf_NFMgmt_NFType_AMF,
+			targetType:   models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("npcf-callback"),
 		},
 		{
 			name:         "wrong callback scope",
-			consumerType: models.NrfNfManagementNfType_UDR,
-			targetType:   models.NrfNfManagementNfType_PCF, scope: models.ServiceName("namf-callback"),
+			consumerType: models.Nrf_NFMgmt_NFType_UDR,
+			targetType:   models.Nrf_NFMgmt_NFType_PCF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
 		},
 	}
 

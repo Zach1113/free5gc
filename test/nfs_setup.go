@@ -116,21 +116,21 @@ func OAuthCertificateDirectory() (string, bool) {
 	return oauthCertificateDir, oauthCertificateDir != ""
 }
 
-func GetNFInstanceID(nfType models.NrfNfManagementNfType) (string, bool) {
+func GetNFInstanceID(nfType models.Nrf_NFMgmt_NFType) (string, bool) {
 	switch nfType {
-	case models.NrfNfManagementNfType_AMF:
+	case models.Nrf_NFMgmt_NFType_AMF:
 		return amf_factory.AmfConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_AUSF:
+	case models.Nrf_NFMgmt_NFType_AUSF:
 		return ausf_factory.AusfConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_PCF:
+	case models.Nrf_NFMgmt_NFType_PCF:
 		return pcf_factory.PcfConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_SMF:
+	case models.Nrf_NFMgmt_NFType_SMF:
 		return smf_factory.SmfConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_UDM:
+	case models.Nrf_NFMgmt_NFType_UDM:
 		return udm_factory.UdmConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_UDR:
+	case models.Nrf_NFMgmt_NFType_UDR:
 		return udr_factory.UdrConfig.GetNfInstanceId(), true
-	case models.NrfNfManagementNfType_NEF:
+	case models.Nrf_NFMgmt_NFType_NEF:
 		return nefNFInstanceID, nefNFInstanceID != ""
 	default:
 		return "", false
