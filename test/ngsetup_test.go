@@ -31,6 +31,17 @@ const (
 
 var initFlag int = initNF
 
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if err := test.CleanupOAuthCertificates(); err != nil {
+		fmt.Printf("Clean up temporary OAuth certificates failed: %v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	os.Exit(code)
+}
+
 func init() {
 	initNfCfg := test.StartNFsConfig{
 		OAuth:  false,

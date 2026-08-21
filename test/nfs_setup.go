@@ -3,6 +3,8 @@ package test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"test/app"
 	"time"
@@ -74,6 +76,66 @@ type StartNFsConfig struct {
 
 var NfCtx context.Context
 var NfCancel context.CancelFunc
+
+var (
+	oauthCertificateDir string
+	nrfCertPemPath      = "../cert/nrf.pem"
+	nrfCertKeyPath      = "../cert/nrf.key"
+	nefNFInstanceID     string
+)
+
+func prepareOAuthCertificateDirectory() error {
+	if oauthCertificateDir != "" {
+		return nil
+	}
+
+	dir, err := os.MkdirTemp("", "free5gc-oauth-certs-")
+	if err != nil {
+		return err
+	}
+
+	oauthCertificateDir = dir
+	nrfCertPemPath = filepath.Join(dir, "nrf.pem")
+	nrfCertKeyPath = filepath.Join(dir, "nrf.key")
+	return nil
+}
+
+func CleanupOAuthCertificates() error {
+	if oauthCertificateDir == "" {
+		return nil
+	}
+
+	dir := oauthCertificateDir
+	oauthCertificateDir = ""
+	nrfCertPemPath = "../cert/nrf.pem"
+	nrfCertKeyPath = "../cert/nrf.key"
+	return os.RemoveAll(dir)
+}
+
+func OAuthCertificateDirectory() (string, bool) {
+	return oauthCertificateDir, oauthCertificateDir != ""
+}
+
+func GetNFInstanceID(nfType models.NrfNfManagementNfType) (string, bool) {
+	switch nfType {
+	case models.NrfNfManagementNfType_AMF:
+		return amf_factory.AmfConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_AUSF:
+		return ausf_factory.AusfConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_PCF:
+		return pcf_factory.PcfConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_SMF:
+		return smf_factory.SmfConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_UDM:
+		return udm_factory.UdmConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_UDR:
+		return udr_factory.UdrConfig.GetNfInstanceId(), true
+	case models.NrfNfManagementNfType_NEF:
+		return nefNFInstanceID, nefNFInstanceID != ""
+	default:
+		return "", false
+	}
+}
 
 func CreateNFs(cfg StartNFsConfig) []app.NFstruct {
 	var nfs []app.NFstruct
@@ -295,6 +357,12 @@ func NewBsfStruct(ctx context.Context) app.NFstruct {
 }
 
 func nrfConfig(oauth bool) error {
+	if oauth {
+		if err := prepareOAuthCertificateDirectory(); err != nil {
+			return fmt.Errorf("prepare temporary OAuth certificate directory: %w", err)
+		}
+	}
+
 	nrf_factory.NrfConfig = &nrf_factory.Config{
 		Info: &nrf_factory.Info{
 			Version:     "1.0.2",
@@ -310,8 +378,8 @@ func nrfConfig(oauth bool) error {
 				BindingIPv4:  "127.0.0.10",
 				Port:         8000,
 				Cert: &nrf_factory.Cert{
-					Pem: "../cert/nrf.pem",
-					Key: "../cert/nrf.key",
+					Pem: nrfCertPemPath,
+					Key: nrfCertKeyPath,
 				},
 				RootCert: &nrf_factory.Cert{
 					Pem: "../cert/root.pem",
@@ -419,7 +487,7 @@ func amfConfig(testID TestId) error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			Security: &amf_factory.Security{
 				IntegrityOrder: integrityOrder,
 				CipheringOrder: cipheringOrder,
@@ -637,7 +705,7 @@ func smfConfig(testID TestId) error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			UrrPeriod:       30,
 			UrrThreshold:    10000,
 			PLMNList: []smf_factory.PlmnID{
@@ -790,7 +858,7 @@ func udrConfig() error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 		},
 		Logger: &udr_factory.Logger{
 			Enable:       true,
@@ -828,7 +896,7 @@ func pcfConfig() error {
 			DefaultBdtRefId: "BdtPolicyId-",
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			ServiceList: []pcf_factory.Service{{
 				ServiceName: "npcf-am-policy-control",
 			}, {
@@ -892,7 +960,7 @@ func udmConfig() error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			SuciProfiles: []suci.SuciProfile{
 				{
 					ProtectionScheme: "1", // Protect Scheme: Profile A
@@ -946,7 +1014,7 @@ func nssfConfig() error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			SupportedPlmnList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1436,7 +1504,7 @@ func ausfConfig() error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			PlmnSupportList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1513,7 +1581,7 @@ func chfConfig() error {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			ServiceNameList: []string{
 				"nchf-convergedcharging",
 			},
@@ -1587,6 +1655,9 @@ func NewNefStruct(ctx context.Context) app.NFstruct {
 	if err != nil {
 		fmt.Printf("NEF Config failed: %v\n", err)
 	}
+	if cfg != nil {
+		nefNFInstanceID = cfg.GetNfInstanceId()
+	}
 	nef_ctx, nef_cancel := context.WithCancel(ctx)
 	nefApp, errApp := nef_service.NewApp(nef_ctx, cfg, "")
 	if errApp != nil {
@@ -1618,7 +1689,7 @@ func nefConfig() (*nef_factory.Config, error) {
 			},
 			NrfUri:          "http://127.0.0.10:8000",
 			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      "../cert/nrf.pem",
+			NrfCertPem:      nrfCertPemPath,
 			ServiceList: []nef_factory.Service{
 				{ServiceName: nef_factory.ServiceNefCallback},
 				{ServiceName: nef_factory.ServiceTraffInflu},

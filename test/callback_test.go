@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync/atomic"
+	"test"
 	"testing"
 	"time"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,9 +22,16 @@ import (
 
 const testAFInstanceID = "88924b10-60b6-455b-9d41-356c3ee72e1f"
 
+type oauthTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	Error       string `json:"error"`
+}
+
 func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
 	t.Helper()
 
+	certDir, ok := test.OAuthCertificateDirectory()
+	require.True(t, ok, "OAuth certificate directory is not configured")
 	rootCert, err := oauth.ParseCertFromPEM("../cert/root.pem")
 	require.NoError(t, err)
 	rootPrivateKey, err := oauth.ParsePrivateKeyFromPEM("../cert/root.key")
@@ -31,70 +39,118 @@ func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
 	afPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	certPath := oauth.GetNFCertPath("../cert", "AF", clientNfID)
+	certPath := oauth.GetNFCertPath(certDir, string(models.NrfNfManagementNfType_AF), clientNfID)
 	_, err = oauth.GenerateCertificate(
-		"AF", clientNfID, certPath, &afPrivateKey.PublicKey, rootCert, rootPrivateKey,
+		string(models.NrfNfManagementNfType_AF), clientNfID, certPath,
+		&afPrivateKey.PublicKey, rootCert, rootPrivateKey,
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err := os.Remove(certPath); err != nil && !os.IsNotExist(err) {
-			t.Errorf("remove AF instance certificate: %v", err)
-		}
-	})
 }
 
-func getOAuthToken(t *testing.T, clientNfID, targetNfType, scope string) string {
+func registerTestNF(
+	t *testing.T,
+	clientNfID string,
+	clientNfType models.NrfNfManagementNfType,
+	serviceName models.ServiceName,
+) {
 	t.Helper()
-	nfProfile := map[string]interface{}{
-		"nfInstanceId": clientNfID,
-		"nfType":       "AF",
-		"nfStatus":     "REGISTERED",
-		"nfServices": []map[string]interface{}{
-			{
-				"serviceInstanceId": "1",
-				"serviceName":       "nnef-callback",
-				"versions": []map[string]interface{}{
-					{"apiVersionInUri": "v1", "apiFullVersion": "1.0.0"},
-				},
-				"scheme":          "http",
-				"nfServiceStatus": "REGISTERED",
-			},
-		},
+
+	nfProfile := models.NrfNfManagementNfProfile{
+		NfInstanceId: clientNfID,
+		NfType:       clientNfType,
+		NfStatus:     models.NrfNfManagementNfStatus_REGISTERED,
+		NfServices: []models.NrfNfManagementNfService{{
+			ServiceInstanceId: "1",
+			ServiceName:       serviceName,
+			Versions: []models.NfServiceVersion{{
+				ApiVersionInUri: "v1",
+				ApiFullVersion:  "1.0.0",
+			}},
+			Scheme:          models.UriScheme_HTTP,
+			NfServiceStatus: models.NfServiceStatus_REGISTERED,
+		}},
 	}
-	b, _ := json.Marshal(nfProfile)
-	// Register AF in NRF
-	req, _ := http.NewRequest(http.MethodPut,
+	b, err := json.Marshal(nfProfile)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPut,
 		"http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances/"+clientNfID, bytes.NewReader(b))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, resp.StatusCode)
+}
+
+func requestOAuthToken(
+	t *testing.T,
+	clientNfID string,
+	clientNfType models.NrfNfManagementNfType,
+	targetNfType models.NrfNfManagementNfType,
+	targetNfInstanceID string,
+	scope models.ServiceName,
+) (int, oauthTokenResponse) {
+	t.Helper()
 
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
 	data.Set("nfInstanceId", clientNfID)
-	data.Set("nfType", "AF")
-	data.Set("targetNfType", targetNfType)
-	data.Set("scope", scope)
+	data.Set("nfType", string(clientNfType))
+	data.Set("targetNfType", string(targetNfType))
+	data.Set("targetNfInstanceId", targetNfInstanceID)
+	data.Set("scope", string(scope))
 
-	req2, _ := http.NewRequest(http.MethodPost,
+	req, err := http.NewRequest(http.MethodPost,
 		"http://127.0.0.10:8000/oauth2/token", strings.NewReader(data.Encode()))
-	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp2, err := http.DefaultClient.Do(req2)
 	require.NoError(t, err)
-	defer resp2.Body.Close()
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 
-	var res map[string]interface{}
-	json.NewDecoder(resp2.Body).Decode(&res)
+	var result oauthTokenResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	return resp.StatusCode, result
+}
 
-	if token, ok := res["access_token"].(string); ok {
-		return token
+func requireOAuthToken(
+	t *testing.T,
+	clientNfID string,
+	clientNfType models.NrfNfManagementNfType,
+	targetNfType models.NrfNfManagementNfType,
+	targetNfInstanceID string,
+	scope models.ServiceName,
+) string {
+	t.Helper()
+
+	status, result := requestOAuthToken(
+		t, clientNfID, clientNfType, targetNfType, targetNfInstanceID, scope,
+	)
+	require.Equal(t, http.StatusOK, status, "OAuth error: %s", result.Error)
+	require.NotEmpty(t, result.AccessToken)
+	return result.AccessToken
+}
+
+func nfInstanceID(t *testing.T, nfType models.NrfNfManagementNfType) string {
+	t.Helper()
+	id, ok := test.GetNFInstanceID(nfType)
+	require.True(t, ok, "test NF %s is not configured", nfType)
+	require.NotEmpty(t, id)
+	return id
+}
+
+func callCallback(t *testing.T, method, callbackURL string, body []byte, token string) int {
+	t.Helper()
+	req, err := http.NewRequest(method, callbackURL, bytes.NewReader(body))
+	require.NoError(t, err)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
-
-	t.Fatalf("Failed to get OAuth token for target %s (scope: %s). "+
-		"Please check if the target NF registered this service in its YAML config. Error: %v",
-		targetNfType, scope, res)
-	return ""
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestOAuth2Callback(t *testing.T) {
@@ -102,6 +158,7 @@ func TestOAuth2Callback(t *testing.T) {
 
 	clientNfID := testAFInstanceID
 	prepareAFInstanceCertificate(t, clientNfID)
+	registerTestNF(t, clientNfID, models.NrfNfManagementNfType_AF, models.ServiceName("nnef-callback"))
 	t.Logf("[TestOAuth2Callback] Using fixed AF Instance ID: %s", clientNfID)
 
 	var afCallCount int64
@@ -136,7 +193,11 @@ func TestOAuth2Callback(t *testing.T) {
 	subReqURL := "http://127.0.0.5:8000/3gpp-traffic-influence/v1/" + afID + "/subscriptions"
 	reqSub, _ := http.NewRequest(http.MethodPost, subReqURL, bytes.NewReader(subBodyJSON))
 	reqSub.Header.Set("Content-Type", "application/json")
-	reqSub.Header.Set("Authorization", "Bearer "+getOAuthToken(t, clientNfID, "NEF", "3gpp-traffic-influence"))
+	reqSub.Header.Set("Authorization", "Bearer "+requireOAuthToken(
+		t, clientNfID, models.NrfNfManagementNfType_AF,
+		models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
+		models.ServiceName("3gpp-traffic-influence"),
+	))
 
 	subResp, err := http.DefaultClient.Do(reqSub)
 	require.NoError(t, err)
@@ -156,7 +217,11 @@ func TestOAuth2Callback(t *testing.T) {
 	callbackURL := "http://127.0.0.5:8000/nnef-callback/v1/notification/smf"
 	reqNotif, _ := http.NewRequest(http.MethodPost, callbackURL, bytes.NewReader(notifBody))
 	reqNotif.Header.Set("Content-Type", "application/json")
-	reqNotif.Header.Set("Authorization", "Bearer "+getOAuthToken(t, clientNfID, "NEF", "nnef-callback"))
+	reqNotif.Header.Set("Authorization", "Bearer "+requireOAuthToken(
+		t, nfInstanceID(t, models.NrfNfManagementNfType_SMF), models.NrfNfManagementNfType_SMF,
+		models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
+		models.ServiceName("nnef-callback"),
+	))
 
 	notifResp, err := http.DefaultClient.Do(reqNotif)
 	require.NoError(t, err)
@@ -170,7 +235,11 @@ func TestOAuth2Callback(t *testing.T) {
 	loc := subResp.Header.Get("Location")
 	if loc != "" {
 		delReq, _ := http.NewRequest(http.MethodDelete, loc, nil)
-		delReq.Header.Set("Authorization", "Bearer "+getOAuthToken(t, clientNfID, "NEF", "3gpp-traffic-influence"))
+		delReq.Header.Set("Authorization", "Bearer "+requireOAuthToken(
+			t, clientNfID, models.NrfNfManagementNfType_AF,
+			models.NrfNfManagementNfType_NEF, nfInstanceID(t, models.NrfNfManagementNfType_NEF),
+			models.ServiceName("3gpp-traffic-influence"),
+		))
 		delResp, err := http.DefaultClient.Do(delReq)
 		if err == nil {
 			defer delResp.Body.Close()
@@ -178,17 +247,97 @@ func TestOAuth2Callback(t *testing.T) {
 		}
 	}
 
-	nfCallbacks := map[string]string{
-		"AMF": "namf-callback",
-		"SMF": "nsmf-callback",
-		"PCF": "npcf-callback",
+	callbackCases := []struct {
+		name           string
+		consumerType   models.NrfNfManagementNfType
+		targetType     models.NrfNfManagementNfType
+		scope          models.ServiceName
+		method         string
+		callbackURL    string
+		body           []byte
+		expectedStatus int
+	}{
+		{
+			name: "PCF to AMF", consumerType: models.NrfNfManagementNfType_PCF,
+			targetType: models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			method: http.MethodGet, callbackURL: "http://127.0.0.18:8000/namf-callback/v1/",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "UDM to AMF", consumerType: models.NrfNfManagementNfType_UDM,
+			targetType: models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+			method: http.MethodGet, callbackURL: "http://127.0.0.18:8000/namf-callback/v1/",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "AMF to PCF", consumerType: models.NrfNfManagementNfType_AMF,
+			targetType: models.NrfNfManagementNfType_PCF, scope: models.ServiceName("npcf-callback"),
+			method: http.MethodPost, callbackURL: "http://127.0.0.7:8000/npcf-callback/v1/amfstatus",
+			body: []byte(`{}`), expectedStatus: http.StatusNoContent,
+		},
+		{
+			name: "UDR to PCF", consumerType: models.NrfNfManagementNfType_UDR,
+			targetType: models.NrfNfManagementNfType_PCF, scope: models.ServiceName("npcf-callback"),
+			method:      http.MethodPost,
+			callbackURL: "http://127.0.0.7:8000/npcf-callback/v1/nudr-notify/policy-data/imsi-test",
+			body:        []byte(`{}`), expectedStatus: http.StatusNotImplemented,
+		},
 	}
 
-	for nfType, scope := range nfCallbacks {
-		t.Logf("[Strict Check] Verifying OAuth2 registration for %s service: %s", nfType, scope)
-		token := getOAuthToken(t, clientNfID, nfType, scope)
-		require.NotEmpty(t, token)
-		t.Logf("[Strict Check] Success: %s has registered %s and NRF issued a token.", nfType, scope)
+	for _, tc := range callbackCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token := requireOAuthToken(
+				t, nfInstanceID(t, tc.consumerType), tc.consumerType,
+				tc.targetType, nfInstanceID(t, tc.targetType), tc.scope,
+			)
+			status := callCallback(t, tc.method, tc.callbackURL, tc.body, token)
+			require.Equal(t, tc.expectedStatus, status)
+		})
+	}
+
+	rejectedRequests := []struct {
+		name         string
+		consumerID   string
+		consumerType models.NrfNfManagementNfType
+		targetType   models.NrfNfManagementNfType
+		scope        models.ServiceName
+	}{
+		{
+			name: "AF cannot call AMF callback", consumerID: clientNfID,
+			consumerType: models.NrfNfManagementNfType_AF,
+			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+		},
+		{
+			name:         "AUSF cannot call AMF callback",
+			consumerType: models.NrfNfManagementNfType_AUSF,
+			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("namf-callback"),
+		},
+		{
+			name:         "callback scope with wrong target",
+			consumerType: models.NrfNfManagementNfType_AMF,
+			targetType:   models.NrfNfManagementNfType_AMF, scope: models.ServiceName("npcf-callback"),
+		},
+		{
+			name:         "wrong callback scope",
+			consumerType: models.NrfNfManagementNfType_UDR,
+			targetType:   models.NrfNfManagementNfType_PCF, scope: models.ServiceName("namf-callback"),
+		},
+	}
+
+	for _, tc := range rejectedRequests {
+		t.Run(tc.name, func(t *testing.T) {
+			consumerID := tc.consumerID
+			if consumerID == "" {
+				consumerID = nfInstanceID(t, tc.consumerType)
+			}
+			status, result := requestOAuthToken(
+				t, consumerID, tc.consumerType,
+				tc.targetType, nfInstanceID(t, tc.targetType), tc.scope,
+			)
+			require.Equal(t, http.StatusBadRequest, status)
+			require.Equal(t, "invalid_scope", result.Error)
+			require.Empty(t, result.AccessToken)
+		})
 	}
 
 	t.Log("[TestOAuth2Callback] PASS - E2E Callback and Service Registration verified.")
