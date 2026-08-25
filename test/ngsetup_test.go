@@ -69,7 +69,8 @@ func init() {
 			initNfCfg.OAuth = true
 		}
 	}
-	if initNfCfg.TestId.Matches(test.TestOAuth2Callback) {
+	if initNfCfg.TestId.Matches(test.TestOAuth2Callback) ||
+		initNfCfg.TestId.Matches(test.TestOAuth2TokenMatrix) {
 		initNfCfg.OAuth = true
 	}
 	fmt.Println("os.Args:", os.Args)

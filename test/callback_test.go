@@ -27,7 +27,9 @@ type oauthTokenResponse struct {
 	Error       string `json:"error"`
 }
 
-func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
+func prepareNFInstanceCertificate(
+	t *testing.T, clientNfType models.Nrf_NFMgmt_NFType, clientNfID string,
+) {
 	t.Helper()
 
 	certDir, ok := test.OAuthCertificateDirectory()
@@ -36,13 +38,13 @@ func prepareAFInstanceCertificate(t *testing.T, clientNfID string) {
 	require.NoError(t, err)
 	rootPrivateKey, err := oauth.ParsePrivateKeyFromPEM("../cert/root.key")
 	require.NoError(t, err)
-	afPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	nfPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	certPath := oauth.GetNFCertPath(certDir, string(models.Nrf_NFMgmt_NFType_AF), clientNfID)
+	certPath := oauth.GetNFCertPath(certDir, string(clientNfType), clientNfID)
 	_, err = oauth.GenerateCertificate(
-		string(models.Nrf_NFMgmt_NFType_AF), clientNfID, certPath,
-		&afPrivateKey.PublicKey, rootCert, rootPrivateKey,
+		string(clientNfType), clientNfID, certPath,
+		&nfPrivateKey.PublicKey, rootCert, rootPrivateKey,
 	)
 	require.NoError(t, err)
 }
@@ -97,7 +99,9 @@ func requestOAuthToken(
 	data.Set("nfInstanceId", clientNfID)
 	data.Set("nfType", string(clientNfType))
 	data.Set("targetNfType", string(targetNfType))
-	data.Set("targetNfInstanceId", targetNfInstanceID)
+	if targetNfInstanceID != "" {
+		data.Set("targetNfInstanceId", targetNfInstanceID)
+	}
 	data.Set("scope", string(scope))
 
 	req, err := http.NewRequest(http.MethodPost,
@@ -157,7 +161,7 @@ func TestOAuth2Callback(t *testing.T) {
 	t.Log("[TestOAuth2Callback] Running in STRICT OAuth2 mode.")
 
 	clientNfID := testAFInstanceID
-	prepareAFInstanceCertificate(t, clientNfID)
+	prepareNFInstanceCertificate(t, models.Nrf_NFMgmt_NFType_AF, clientNfID)
 	registerTestNF(t, clientNfID, models.Nrf_NFMgmt_NFType_AF, models.Nrf_NFMgmt_ServiceName("nnef-callback"))
 	t.Logf("[TestOAuth2Callback] Using fixed AF Instance ID: %s", clientNfID)
 
@@ -256,6 +260,7 @@ func TestOAuth2Callback(t *testing.T) {
 		callbackURL    string
 		body           []byte
 		expectedStatus int
+		typeScoped     bool
 	}{
 		{
 			name: "PCF to AMF", consumerType: models.Nrf_NFMgmt_NFType_PCF,
@@ -282,13 +287,38 @@ func TestOAuth2Callback(t *testing.T) {
 			callbackURL: "http://127.0.0.7:8000/npcf-callback/v1/nudr-notify/policy-data/imsi-test",
 			body:        []byte(`{}`), expectedStatus: http.StatusNotImplemented,
 		},
+		{
+			name: "UDR to UDM", consumerType: models.Nrf_NFMgmt_NFType_UDR,
+			targetType: models.Nrf_NFMgmt_NFType_UDM, scope: models.Nrf_NFMgmt_ServiceName_NUDM_SDM,
+			method:         http.MethodPost,
+			callbackURL:    "http://127.0.0.3:8000/imsi-208930000000001/sdm-subscriptions",
+			body:           []byte(`{"notifyItems":[{"resourceId":"resource"}]}`),
+			expectedStatus: http.StatusNoContent,
+		},
+		{
+			name: "SMF to AMF", consumerType: models.Nrf_NFMgmt_NFType_SMF,
+			targetType: models.Nrf_NFMgmt_NFType_AMF, scope: models.Nrf_NFMgmt_ServiceName("namf-callback"),
+			method: http.MethodGet, callbackURL: "http://127.0.0.18:8000/namf-callback/v1/",
+			expectedStatus: http.StatusOK, typeScoped: true,
+		},
+		{
+			name: "PCF to SMF", consumerType: models.Nrf_NFMgmt_NFType_PCF,
+			targetType: models.Nrf_NFMgmt_NFType_SMF, scope: models.Nrf_NFMgmt_ServiceName("nsmf-callback"),
+			method:      http.MethodPost,
+			callbackURL: "http://127.0.0.2:8000/nsmf-callback/v1/sm-policies/ref/terminate",
+			body:        []byte(`{}`), expectedStatus: http.StatusNotImplemented, typeScoped: true,
+		},
 	}
 
 	for _, tc := range callbackCases {
 		t.Run(tc.name, func(t *testing.T) {
+			targetInstanceID := nfInstanceID(t, tc.targetType)
+			if tc.typeScoped {
+				targetInstanceID = ""
+			}
 			token := requireOAuthToken(
 				t, nfInstanceID(t, tc.consumerType), tc.consumerType,
-				tc.targetType, nfInstanceID(t, tc.targetType), tc.scope,
+				tc.targetType, targetInstanceID, tc.scope,
 			)
 			status := callCallback(t, tc.method, tc.callbackURL, tc.body, token)
 			require.Equal(t, tc.expectedStatus, status)

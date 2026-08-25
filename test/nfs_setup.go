@@ -45,8 +45,13 @@ const (
 	TestAFInfluenceOnTrafficRouting TestId = "TestAFInfluenceOnTrafficRouting"
 	TestRequestTwoPDUSessions       TestId = "TestRequestTwoPDUSessions"
 	TestOAuth2Callback              TestId = "TestOAuth2Callback"
+	TestOAuth2TokenMatrix           TestId = "TestOAuth2TokenMatrix"
 	testNrfInstanceID                      = "85eb217f-b989-4039-b445-ee5d77dc4ff2"
 )
+
+func NRFInstanceID() string {
+	return testNrfInstanceID
+}
 
 func (id TestId) Matches(testID TestId) bool {
 	if id == "" {
@@ -132,6 +137,10 @@ func GetNFInstanceID(nfType models.Nrf_NFMgmt_NFType) (string, bool) {
 		return udr_factory.UdrConfig.GetNfInstanceId(), true
 	case models.Nrf_NFMgmt_NFType_NEF:
 		return nefNFInstanceID, nefNFInstanceID != ""
+	case models.Nrf_NFMgmt_NFType_CHF:
+		return chf_factory.ChfConfig.GetNfInstanceId(), true
+	case models.Nrf_NFMgmt_NFType_NSSF:
+		return nssf_factory.NssfConfig.GetNfInstanceId(), true
 	default:
 		return "", false
 	}
@@ -218,7 +227,7 @@ func NewSmfStruct(ctx context.Context, testId TestId) app.NFstruct {
 	}
 	smf_ctx, smf_cancel := context.WithCancel(ctx)
 	pfcpStart, pfcpTerminate := smf_utils.InitPFCPFunc(ctx)
-	if testId.Matches(TestOAuth2Callback) {
+	if testId.Matches(TestOAuth2Callback) || testId.Matches(TestOAuth2TokenMatrix) {
 		// This test exercises only SBI/OAuth callbacks and does not require a UPF.
 		// Avoid depending on the test network namespace for the PFCP listener.
 		pfcpStart = func(*smf_service.SmfApp) {}
