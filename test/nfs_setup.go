@@ -46,12 +46,7 @@ const (
 	TestRequestTwoPDUSessions       TestId = "TestRequestTwoPDUSessions"
 	TestOAuth2Callback              TestId = "TestOAuth2Callback"
 	TestOAuth2TokenMatrix           TestId = "TestOAuth2TokenMatrix"
-	testNrfInstanceID                      = "85eb217f-b989-4039-b445-ee5d77dc4ff2"
 )
-
-func NRFInstanceID() string {
-	return testNrfInstanceID
-}
 
 func (id TestId) Matches(testID TestId) bool {
 	if id == "" {
@@ -378,9 +373,8 @@ func nrfConfig(oauth bool) error {
 			Description: "NRF initial test configuration",
 		},
 		Configuration: &nrf_factory.Configuration{
-			NfInstanceId: testNrfInstanceID,
-			MongoDBName:  "free5gc",
-			MongoDBUrl:   "mongodb://127.0.0.1:27017",
+			MongoDBName: "free5gc",
+			MongoDBUrl:  "mongodb://127.0.0.1:27017",
 			Sbi: &nrf_factory.Sbi{
 				Scheme:       "http",
 				RegisterIPv4: "127.0.0.10",
@@ -494,9 +488,8 @@ func amfConfig(testID TestId) error {
 			SupportDnnList: []string{
 				"internet",
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			Security: &amf_factory.Security{
 				IntegrityOrder: integrityOrder,
 				CipheringOrder: cipheringOrder,
@@ -712,11 +705,10 @@ func smfConfig(testID TestId) error {
 				ExpireTime:    5 * time.Second,
 				MaxRetryTimes: 2,
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
-			UrrPeriod:       30,
-			UrrThreshold:    10000,
+			NrfUri:       "http://127.0.0.10:8000",
+			NrfCertPem:   nrfCertPemPath,
+			UrrPeriod:    30,
+			UrrThreshold: 10000,
 			PLMNList: []smf_factory.PlmnID{
 				{
 					Mcc: "208",
@@ -865,9 +857,8 @@ func udrConfig() error {
 				Name: "free5gc",
 				Url:  "mongodb://localhost:27017",
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 		},
 		Logger: &udr_factory.Logger{
 			Enable:       true,
@@ -904,7 +895,6 @@ func pcfConfig() error {
 			TimeFormat:      "2019-01-02 15:04:05",
 			DefaultBdtRefId: "BdtPolicyId-",
 			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
 			NrfCertPem:      nrfCertPemPath,
 			ServiceList: []pcf_factory.Service{{
 				ServiceName: "npcf-am-policy-control",
@@ -967,9 +957,8 @@ func udmConfig() error {
 					Key: "cert/udm.key",
 				},
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			SuciProfiles: []suci.SuciProfile{
 				{
 					ProtectionScheme: "1", // Protect Scheme: Profile A
@@ -1021,9 +1010,8 @@ func nssfConfig() error {
 				"nnssf-nsselection",
 				"nnssf-nssaiavailability",
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			SupportedPlmnList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1511,9 +1499,8 @@ func ausfConfig() error {
 			ServiceNameList: []string{
 				"nausf-auth",
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			PlmnSupportList: []models.PlmnId{{
 				Mcc: "208",
 				Mnc: "93",
@@ -1588,9 +1575,8 @@ func chfConfig() error {
 					Key: "../cert/chf.key",
 				},
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			ServiceNameList: []string{
 				"nchf-convergedcharging",
 			},
@@ -1696,9 +1682,8 @@ func nefConfig() (*nef_factory.Config, error) {
 				BindingIPv4:  "127.0.0.5",
 				Port:         8000,
 			},
-			NrfUri:          "http://127.0.0.10:8000",
-			NrfNfInstanceId: testNrfInstanceID,
-			NrfCertPem:      nrfCertPemPath,
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: nrfCertPemPath,
 			ServiceList: []nef_factory.Service{
 				{ServiceName: nef_factory.ServiceNefCallback},
 				{ServiceName: nef_factory.ServiceTraffInflu},
