@@ -85,13 +85,13 @@ func CreateNFs(cfg StartNFsConfig) []app.NFstruct {
 		nfs = append(nfs, NewSmfStruct(NfCtx, cfg.TestId))
 	}
 	if cfg.Udr {
-		nfs = append(nfs, NewUdrStruct(NfCtx))
+		nfs = append(nfs, NewUdrStruct(NfCtx, cfg.TestId))
 	}
 	if cfg.Pcf {
 		nfs = append(nfs, NewPcfStruct(NfCtx))
 	}
 	if cfg.Udm {
-		nfs = append(nfs, NewUdmStruct(NfCtx))
+		nfs = append(nfs, NewUdmStruct(NfCtx, cfg.TestId))
 	}
 	if cfg.Nssf {
 		nfs = append(nfs, NewNssfStruct(NfCtx))
@@ -163,8 +163,8 @@ func NewSmfStruct(ctx context.Context, testId TestId) app.NFstruct {
 	}
 }
 
-func NewUdmStruct(ctx context.Context) app.NFstruct {
-	if err := udmConfig(); err != nil {
+func NewUdmStruct(ctx context.Context, testID TestId) app.NFstruct {
+	if err := udmConfig(testID); err != nil {
 		fmt.Printf("UDM Config failed: %v\n", err)
 	}
 	udm_ctx, udm_cancel := context.WithCancel(ctx)
@@ -197,8 +197,8 @@ func NewPcfStruct(ctx context.Context) app.NFstruct {
 	}
 }
 
-func NewUdrStruct(ctx context.Context) app.NFstruct {
-	if err := udrConfig(); err != nil {
+func NewUdrStruct(ctx context.Context, testID TestId) app.NFstruct {
+	if err := udrConfig(testID); err != nil {
 		fmt.Printf("UDR Config failed: %v\n", err)
 	}
 	udr_ctx, udr_cancel := context.WithCancel(ctx)
@@ -830,7 +830,12 @@ func scpConfig() (*scp_factory.Config, error) {
 	return cfg, nil
 }
 
-func udrConfig() error {
+func udrConfig(testID TestId) error {
+	registerIPv4 := "127.0.0.4"
+	if testID == TestSCPDirectProxy {
+		// Advertise SCP as the UDR service endpoint while UDR keeps its own bind address.
+		registerIPv4 = "127.0.0.6"
+	}
 	udr_factory.UdrConfig = &udr_factory.Config{
 		Info: &udr_factory.Info{
 			Version:     "1.1.0",
@@ -839,7 +844,7 @@ func udrConfig() error {
 		Configuration: &udr_factory.Configuration{
 			Sbi: &udr_factory.Sbi{
 				Scheme:       "http",
-				RegisterIPv4: "127.0.0.4",
+				RegisterIPv4: registerIPv4,
 				BindingIPv4:  "127.0.0.4",
 				Port:         8000,
 				Tls: &udr_factory.Tls{
@@ -928,7 +933,12 @@ func pcfConfig() error {
 	return nil
 }
 
-func udmConfig() error {
+func udmConfig(testID TestId) error {
+	registerIPv4 := "127.0.0.3"
+	if testID == TestSCPDirectProxy {
+		// Advertise SCP as the UDM service endpoint while UDM keeps its own bind address.
+		registerIPv4 = "127.0.0.6"
+	}
 	udm_factory.UdmConfig = &udm_factory.Config{
 		Info: &udm_factory.Info{
 			Version:     "1.0.3",
@@ -944,7 +954,7 @@ func udmConfig() error {
 			},
 			Sbi: &udm_factory.Sbi{
 				Scheme:       "http",
-				RegisterIPv4: "127.0.0.3",
+				RegisterIPv4: registerIPv4,
 				BindingIPv4:  "127.0.0.3",
 				Port:         8000,
 				Tls: &udm_factory.Tls{
