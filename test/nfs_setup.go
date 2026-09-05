@@ -97,7 +97,7 @@ func CreateNFs(cfg StartNFsConfig) []app.NFstruct {
 		nfs = append(nfs, NewNssfStruct(NfCtx))
 	}
 	if cfg.Ausf {
-		nfs = append(nfs, NewAusfStruct(NfCtx))
+		nfs = append(nfs, NewAusfStruct(NfCtx, cfg.TestId))
 	}
 	if cfg.Chf {
 		nfs = append(nfs, NewChfStruct(NfCtx))
@@ -231,8 +231,8 @@ func NewNssfStruct(ctx context.Context) app.NFstruct {
 	}
 }
 
-func NewAusfStruct(ctx context.Context) app.NFstruct {
-	if err := ausfConfig(); err != nil {
+func NewAusfStruct(ctx context.Context, testID TestId) app.NFstruct {
+	if err := ausfConfig(testID); err != nil {
 		fmt.Printf("AUSF Config failed: %v\n", err)
 	}
 
@@ -1484,7 +1484,12 @@ func nssfConfig() error {
 	return nil
 }
 
-func ausfConfig() error {
+func ausfConfig(testID TestId) error {
+	registerIPv4 := "127.0.0.9"
+	if testID == TestSCP {
+		// Advertise SCP as the AUSF service endpoint while AUSF keeps its own bind address.
+		registerIPv4 = "127.0.0.6"
+	}
 	ausf_factory.AusfConfig = &ausf_factory.Config{
 		Info: &ausf_factory.Info{
 			Version:     "1.0.3",
@@ -1493,7 +1498,7 @@ func ausfConfig() error {
 		Configuration: &ausf_factory.Configuration{
 			Sbi: &ausf_factory.Sbi{
 				Scheme:       "http",
-				RegisterIPv4: "127.0.0.9",
+				RegisterIPv4: registerIPv4,
 				BindingIPv4:  "127.0.0.9",
 				Port:         8000,
 				Tls: &ausf_factory.Tls{

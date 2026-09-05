@@ -107,8 +107,7 @@ func init() {
 			Scp:  initNfCfg.TestId == test.TestSCP,
 		}
 		if initNfCfg.TestId == test.TestSCP {
-			// The SCP integration test only needs the NRF and the three producer NFs.
-			startNfCfg.Amf = false
+			// Keep AMF for the UE-driven authentication flow; unrelated NFs stay disabled.
 			startNfCfg.Smf = false
 			startNfCfg.Pcf = false
 			startNfCfg.Nssf = false

@@ -1,7 +1,6 @@
 package test_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -9,24 +8,23 @@ import (
 
 	"test"
 	"test/consumerTestdata/UDM/TestGenAuthData"
+	"test/nasTestpacket"
 
+	nasIE "github.com/free5gc/nas/ie"
 	nasMessage "github.com/free5gc/nas/message"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	scpBaseURL         = "http://127.0.0.6:8000"
-	nrfBaseURL         = "http://127.0.0.10:8000"
-	servingNetworkName = "5G:mnc093.mcc208.3gppnetwork.org"
-	testAusfInstanceID = "00000000-0000-4000-8000-000000000000"
+	scpBaseURL = "http://127.0.0.6:8000"
+	nrfBaseURL = "http://127.0.0.10:8000"
 )
 
-// TestSCP verifies the R17 proxy paths from SCP to UDR, UDM,
-// and AUSF. UDM and UDR advertise SCP as their service endpoint in NRF while
-// retaining their real binding addresses. Consequently, the producer NFs use
-// normal NRF discovery and remain unaware that their requests traverse SCP.
+// TestSCP verifies that NF service discovery routes a complete 5G-AKA
+// authentication through SCP without making the consumer NFs SCP-aware.
 func TestSCP(t *testing.T) {
 	ue := test.NewRanUeContext(
 		"imsi-208930000007487",
@@ -35,6 +33,7 @@ func TestSCP(t *testing.T) {
 		nasMessage.AlgIntegrity128NIA2,
 		models.AccessType_3_GPP_ACCESS,
 	)
+	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(
 		TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -52,6 +51,12 @@ func TestSCP(t *testing.T) {
 
 	t.Run("NRF advertises producer services through SCP", func(t *testing.T) {
 		requireDiscoveredServiceURI(t,
+			models.Nrf_NFMgmt_NFType_AMF,
+			models.Nrf_NFMgmt_NFType_AUSF,
+			models.Nrf_NFMgmt_ServiceName_NAUSF_AUTH,
+			scpBaseURL,
+		)
+		requireDiscoveredServiceURI(t,
 			models.Nrf_NFMgmt_NFType_AUSF,
 			models.Nrf_NFMgmt_NFType_UDM,
 			models.Nrf_NFMgmt_ServiceName_NUDM_UEAU,
@@ -65,62 +70,80 @@ func TestSCP(t *testing.T) {
 		)
 	})
 
-	t.Run("nudr-dr authentication subscription", func(t *testing.T) {
-		resp, err := http.Get(scpBaseURL + "/nudr-dr/v2/subscription-data/" +
-			ue.Supi + "/authentication-data/authentication-subscription")
+	t.Run("complete 5G-AKA authentication through SCP", func(t *testing.T) {
+		conn, err := test.ConnectToAmf("127.0.0.1", "127.0.0.1", 38412, 9487)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		defer conn.Close()
 
-		var authSubs models.Udr_DR_AuthenticationSubscription
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authSubs))
-		require.Equal(t, ue.AuthenticationSubs.EncPermanentKey, authSubs.EncPermanentKey)
-		require.Equal(t, ue.AuthenticationSubs.EncOpcKey, authSubs.EncOpcKey)
+		sendMsg, err := test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "free5gc", "", "", "")
+		require.NoError(t, err)
+		_, err = conn.Write(sendMsg)
+		require.NoError(t, err)
+
+		recvMsg := make([]byte, 2048)
+		n, err := conn.Read(recvMsg)
+		require.NoError(t, err)
+		ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
+		require.NoError(t, err)
+		require.Equal(t, ngapMessage.MessageTypeSuccessfulOutcome, ngapPdu.MessageType())
+		require.Equal(t, ngapMessage.ProcedureCodeNGSetup, ngapPdu.ProcedureCode())
+
+		mobileIdentity5GS := nasTestpacket.MobileIdentity5GS(
+			[]byte{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78},
+		)
+		ueSecurityCapability := ue.GetUESecurityCapability()
+		registrationRequest := nasTestpacket.GetRegistrationRequest(
+			nasIE.RegType_InitialReg,
+			mobileIdentity5GS,
+			nil,
+			ueSecurityCapability,
+			nil,
+			nil,
+			nil,
+		)
+		sendMsg, err = test.GetInitialUEMessage(ue.RanUeNgapId, registrationRequest, "")
+		require.NoError(t, err)
+		_, err = conn.Write(sendMsg)
+		require.NoError(t, err)
+
+		n, err = conn.Read(recvMsg)
+		require.NoError(t, err)
+		ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
+		require.NoError(t, err)
+		require.Equal(t, ngapMessage.MessageTypeInitiatingMessage, ngapPdu.MessageType())
+		require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapPdu.ProcedureCode())
+
+		nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
+		require.NotNil(t, nasPdu)
+		require.Equal(t, nasMessage.MsgTypeAuthReq, nasPdu.MsgType(),
+			"expected NAS Authentication Request")
+		rand := nasPdu.(*nasMessage.AuthReq).AuthParamRAND5GAuthChlg.Rand
+		resStar := ue.DeriveRESstarAndSetKey(
+			ue.AuthenticationSubs,
+			rand[:],
+			"5G:mnc093.mcc208.3gppnetwork.org",
+		)
+
+		pdu := nasTestpacket.GetAuthenticationResponse(resStar, "")
+		sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
+		require.NoError(t, err)
+		_, err = conn.Write(sendMsg)
+		require.NoError(t, err)
+
+		// AMF sends Security Mode Command only after AUSF accepts RES* via
+		// the 5G-AKA confirmation endpoint, proving authentication succeeded.
+		n, err = conn.Read(recvMsg)
+		require.NoError(t, err)
+		ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
+		require.NoError(t, err)
+		require.Equal(t, ngapMessage.MessageTypeInitiatingMessage, ngapPdu.MessageType())
+		require.Equal(t, ngapMessage.ProcedureCodeDownlinkNASTransport, ngapPdu.ProcedureCode())
+
+		nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
+		require.NotNil(t, nasPdu)
+		require.Equal(t, nasMessage.MsgTypeSecModeCmd, nasPdu.MsgType(),
+			"authentication did not complete successfully")
 	})
-
-	t.Run("nudm-ueau generate auth data", func(t *testing.T) {
-		reqBody := models.Udm_UEAU_AuthenticationInfoRequest{
-			ServingNetworkName: servingNetworkName,
-			AusfInstanceId:     testAusfInstanceID,
-		}
-		resp := postJSON(t, scpBaseURL+"/nudm-ueau/v1/"+ue.Supi+
-			"/security-information/generate-auth-data", reqBody)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var authInfo models.Udm_UEAU_AuthenticationInfoResult
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authInfo))
-		require.Equal(t, ue.Supi, authInfo.Supi)
-		require.Equal(t, models.Udm_UEAU_AuthType_5_G_AKA, authInfo.AuthType)
-		require.NotNil(t, authInfo.AuthenticationVector)
-	})
-
-	t.Run("nausf-auth ue authentication", func(t *testing.T) {
-		reqBody := models.Ausf_UEAU_AuthenticationInfo{
-			SupiOrSuci:         ue.Supi,
-			ServingNetworkName: servingNetworkName,
-		}
-		resp := postJSON(t, scpBaseURL+"/nausf-auth/v1/ue-authentications", reqBody)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var authCtx models.Ausf_UEAU_UEAuthenticationCtx
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authCtx))
-		require.Equal(t, models.Ausf_UEAU_AuthType_5_G_AKA, authCtx.AuthType)
-		require.Equal(t, servingNetworkName, authCtx.ServingNetworkName)
-		require.NotEmpty(t, authCtx.Links["5g-aka"])
-	})
-}
-
-func postJSON(t *testing.T, url string, body any) *http.Response {
-	t.Helper()
-
-	payload, err := json.Marshal(body)
-	require.NoError(t, err)
-
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(t, err)
-	return resp
 }
 
 func requireDiscoveredServiceURI(
