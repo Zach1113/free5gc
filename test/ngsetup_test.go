@@ -14,8 +14,8 @@ import (
 	"test/app"
 	"test/consumerTestdata/UDM/TestGenAuthData"
 
-	"github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
+	nasMessage "github.com/free5gc/nas/message"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/mongoapi"
 	"github.com/stretchr/testify/assert"
@@ -103,15 +103,18 @@ func init() {
 			Ausf: true,
 			Chf:  true,
 			Bsf:  true,
+			Nef:  true,
 			Scp:  initNfCfg.TestId == test.TestSCPDirectProxy,
 		}
 		if initNfCfg.TestId == test.TestSCPDirectProxy {
+			// The direct-proxy test only needs the NRF and the three producer NFs.
 			startNfCfg.Amf = false
 			startNfCfg.Smf = false
 			startNfCfg.Pcf = false
 			startNfCfg.Nssf = false
 			startNfCfg.Chf = false
 			startNfCfg.Bsf = false
+			startNfCfg.Nef = false
 		}
 		NFstructs = test.CreateNFs(startNfCfg)
 		NfStart()
@@ -171,7 +174,7 @@ func TestNGSetup(t *testing.T) {
 	assert.Nil(t, err)
 
 	// send NGSetupRequest Msg
-	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "free5gc")
+	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "free5gc", "", "", "")
 	assert.Nil(t, err)
 	_, err = conn.Write(sendMsg)
 	assert.Nil(t, err)
@@ -179,7 +182,7 @@ func TestNGSetup(t *testing.T) {
 	// receive NGSetupResponse Msg
 	n, err = conn.Read(recvMsg)
 	assert.Nil(t, err)
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 
 	// close Connection
@@ -188,9 +191,9 @@ func TestNGSetup(t *testing.T) {
 
 func TestCN(t *testing.T) {
 	// New UE
-	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA0, models.AccessType__3_GPP_ACCESS)
+	ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA2, nasMessage.AlgIntegrity128NIA2,
+		models.AccessType_3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA0, nasMessage.AlgIntegrity128NIA0, models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,

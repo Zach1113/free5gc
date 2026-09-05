@@ -17,13 +17,15 @@ import (
 	bsf_service "github.com/free5gc/bsf/pkg/service"
 	chf_factory "github.com/free5gc/chf/pkg/factory"
 	chf_service "github.com/free5gc/chf/pkg/service"
+	nef_factory "github.com/free5gc/nef/pkg/factory"
+	nef_service "github.com/free5gc/nef/pkg/service"
 	nrf_factory "github.com/free5gc/nrf/pkg/factory"
 	nrf_service "github.com/free5gc/nrf/pkg/service"
 	nssf_factory "github.com/free5gc/nssf/pkg/factory"
 	nssf_service "github.com/free5gc/nssf/pkg/service"
 	pcf_factory "github.com/free5gc/pcf/pkg/factory"
 	pcf_service "github.com/free5gc/pcf/pkg/service"
-	scp_service "github.com/free5gc/scp/pkg/app"
+	scp_app "github.com/free5gc/scp/pkg/app"
 	scp_factory "github.com/free5gc/scp/pkg/factory"
 	smf_factory "github.com/free5gc/smf/pkg/factory"
 	smf_service "github.com/free5gc/smf/pkg/service"
@@ -55,6 +57,7 @@ type StartNFsConfig struct {
 	Ausf bool `yaml:"ausf,omitempty" default:"false"`
 	Chf  bool `yaml:"chf,omitempty" default:"false"`
 	Bsf  bool `yaml:"bsf,omitempty" default:"false"`
+	Nef  bool `yaml:"nef,omitempty" default:"false"`
 	Scp  bool `yaml:"scp,omitempty" default:"false"`
 
 	OAuth  bool   `yaml:"oauth,omitempty" default:"false"`
@@ -101,6 +104,9 @@ func CreateNFs(cfg StartNFsConfig) []app.NFstruct {
 	}
 	if cfg.Bsf {
 		nfs = append(nfs, NewBsfStruct(NfCtx))
+	}
+	if cfg.Nef {
+		nfs = append(nfs, NewNefStruct(NfCtx))
 	}
 	return nfs
 }
@@ -243,21 +249,33 @@ func NewAusfStruct(ctx context.Context) app.NFstruct {
 	}
 }
 
+// scpAppWrapper adapts the context-aware SCP lifecycle to the common test NF interface.
+type scpAppWrapper struct {
+	inner *scp_app.ScpApp
+	ctx   context.Context
+}
+
+func (w *scpAppWrapper) SetLogEnable(enable bool)          { w.inner.SetLogEnable(enable) }
+func (w *scpAppWrapper) SetLogLevel(level string)          { w.inner.SetLogLevel(level) }
+func (w *scpAppWrapper) SetReportCaller(reportCaller bool) { w.inner.SetReportCaller(reportCaller) }
+func (w *scpAppWrapper) Start()                            { w.inner.Start(w.ctx) }
+func (w *scpAppWrapper) Terminate()                        { w.inner.Terminate(context.Background()) }
+
 func NewScpStruct(ctx context.Context) app.NFstruct {
 	cfg, err := scpConfig()
 	if err != nil {
 		fmt.Printf("SCP Config failed: %v\n", err)
 	}
-	scp_ctx, scp_cancel := context.WithCancel(ctx)
-	scpApp, errApp := scp_service.NewAppWithContext(scp_ctx, cfg, "")
-	if errApp != nil {
-		fmt.Printf("SCP NewApp failed: %v\n", errApp)
+	scpCtx, scpCancel := context.WithCancel(ctx)
+	scpApp, err := scp_app.NewApp(cfg, "")
+	if err != nil {
+		fmt.Printf("SCP NewApp failed: %v\n", err)
 	}
 
 	return app.NFstruct{
-		Nf:     scpApp,
-		Ctx:    &scp_ctx,
-		Cancel: &scp_cancel,
+		Nf:     &scpAppWrapper{inner: scpApp, ctx: scpCtx},
+		Ctx:    &scpCtx,
+		Cancel: &scpCancel,
 	}
 }
 
@@ -379,6 +397,7 @@ func amfConfig(testID TestId) error {
 				"namf-mt",
 				"namf-loc",
 				"namf-oam",
+				"namf-callback",
 			},
 			ServedGumaiList: []models.Guami{{
 				PlmnId: &models.PlmnIdNid{
@@ -393,6 +412,12 @@ func amfConfig(testID TestId) error {
 					Mnc: "93",
 				},
 				Tac: "000001",
+			}, {
+				PlmnId: &models.PlmnId{
+					Mcc: "208",
+					Mnc: "93",
+				},
+				Tac: "000011",
 			}},
 			PlmnSupportList: []amf_factory.PlmnSupportItem{{
 				PlmnId: &models.PlmnId{
@@ -477,6 +502,11 @@ func amfConfig(testID TestId) error {
 				ExpireTime:    6000000000,
 				MaxRetryTimes: 4,
 			},
+			T3555: amf_factory.TimerValue{
+				Enable:        true,
+				ExpireTime:    6000000000,
+				MaxRetryTimes: 4,
+			},
 		},
 		Logger: &amf_factory.Logger{
 			Enable:       true,
@@ -520,6 +550,7 @@ func smfConfig(testID TestId) error {
 				"nsmf-pdusession",
 				"nsmf-event-exposure",
 				"nsmf-oam",
+				"nsmf-callback",
 			},
 			SNssaiInfo: []*smf_factory.SnssaiInfoItem{{
 				SNssai: &models.Snssai{
@@ -755,7 +786,7 @@ func scpConfig() (*scp_factory.Config, error) {
 	cfg := &scp_factory.Config{
 		Info: &scp_factory.Info{
 			Version:     "1.0.1",
-			Description: "SCP initial test configuration",
+			Description: "SCP test configuration",
 		},
 		Configuration: &scp_factory.Configuration{
 			Sbi: &scp_factory.Sbi{
@@ -770,11 +801,12 @@ func scpConfig() (*scp_factory.Config, error) {
 			},
 			NrfUri:     "http://127.0.0.10:8000",
 			NrfCertPem: "../cert/nrf.pem",
-			ServiceList: []scp_factory.Service{{
-				ServiceName: "nausf-auth",
-			}, {
-				ServiceName: "nudm-ueau",
-			}},
+			ServiceList: []scp_factory.Service{
+				{ServiceName: scp_factory.ServiceNausfAuth},
+				{ServiceName: scp_factory.ServiceNudmUeau},
+				{ServiceName: scp_factory.ServiceNudmSubManage},
+				{ServiceName: scp_factory.ServiceNudrDR},
+			},
 			AmfUri:  "http://127.0.0.18:8000",
 			AusfUri: "http://127.0.0.9:8000",
 			ChfUri:  "http://127.0.0.113:8000",
@@ -873,6 +905,8 @@ func pcfConfig() error {
 				ServiceName: "npcf-eventexposure",
 			}, {
 				ServiceName: "npcf-ue-policy-control",
+			}, {
+				ServiceName: "npcf-callback",
 			}},
 			Mongodb: &pcf_factory.Mongodb{
 				Name: "free5gc",
@@ -948,7 +982,7 @@ func udmConfig() error {
 }
 
 func nssfConfig() error {
-	var accessType3GPP models.AccessType = models.AccessType__3_GPP_ACCESS
+	var accessType3GPP models.AccessType = models.AccessType_3_GPP_ACCESS
 
 	nssf_factory.NssfConfig = &nssf_factory.Config{
 		Info: &nssf_factory.Info{
@@ -967,7 +1001,7 @@ func nssfConfig() error {
 					Key: "cert/nssf.key",
 				},
 			},
-			ServiceNameList: []models.ServiceName{
+			ServiceNameList: []models.Nrf_NFMgmt_ServiceName{
 				"nnssf-nsselection",
 				"nnssf-nssaiavailability",
 			},
@@ -1003,7 +1037,7 @@ func nssfConfig() error {
 				Snssai: &models.Snssai{
 					Sst: 1,
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "10",
 				}},
@@ -1012,7 +1046,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000001",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "11",
 				}},
@@ -1021,7 +1055,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000002",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "12",
 				}, {
@@ -1033,7 +1067,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "000003",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "13",
 				}},
@@ -1041,7 +1075,7 @@ func nssfConfig() error {
 				Snssai: &models.Snssai{
 					Sst: 2,
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "20",
 				}},
@@ -1050,7 +1084,7 @@ func nssfConfig() error {
 					Sst: 2,
 					Sd:  "000001",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "21",
 				}},
@@ -1059,7 +1093,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "fedcba",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "22",
 				}},
@@ -1068,7 +1102,7 @@ func nssfConfig() error {
 					Sst: 1,
 					Sd:  "112233",
 				},
-				NsiInformationList: []models.NsiInformation{{
+				NsiInformationList: []models.Nssf_NSSel_NsiInformation{{
 					NrfId: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
 					NsiId: "23",
 				}},
@@ -1081,7 +1115,7 @@ func nssfConfig() error {
 					"a1fba9ba-2e39-4e22-9c74-f749da571d0d",
 				},
 				NrfAmfSet: "http://127.0.0.10:8000/nnrf-nfm/v1/nf-instances",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1120,7 +1154,7 @@ func nssfConfig() error {
 			}, {
 				AmfSetId:  "2",
 				NrfAmfSet: "http://localhost:8084/nnrf-nfm/v1/nf-instances",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1160,7 +1194,7 @@ func nssfConfig() error {
 			}},
 			AmfList: []nssf_factory.AmfConfig{{
 				NfId: "469de254-2fe5-4ca0-8381-af3f500af77c",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1194,7 +1228,7 @@ func nssfConfig() error {
 				}},
 			}, {
 				NfId: "fbe604a8-27b2-417e-bd7c-8a7be2691f8d",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1235,7 +1269,7 @@ func nssfConfig() error {
 				}},
 			}, {
 				NfId: "b9e6e2cb-5ce8-4cb6-9173-a266dd9a2f0c",
-				SupportedNssaiAvailabilityData: []models.SupportedNssaiAvailabilityData{{
+				SupportedNssaiAvailabilityData: []models.Nssf_NSSAIAvail_SupportedNssaiAvailabilityData{{
 					Tai: &models.Tai{
 						PlmnId: &models.PlmnId{
 							Mcc: "466",
@@ -1315,7 +1349,7 @@ func nssfConfig() error {
 				}, {
 					Sst: 2,
 				}},
-				RestrictedSnssaiList: []models.RestrictedSnssai{{
+				RestrictedSnssaiList: []models.Nssf_NSSAIAvail_RestrictedSnssai{{
 					HomePlmnId: &models.PlmnId{
 						Mcc: "310",
 						Mnc: "560",
@@ -1345,7 +1379,7 @@ func nssfConfig() error {
 					Sst: 2,
 					Sd:  "000001",
 				}},
-				RestrictedSnssaiList: []models.RestrictedSnssai{{
+				RestrictedSnssaiList: []models.Nssf_NSSAIAvail_RestrictedSnssai{{
 					HomePlmnId: &models.PlmnId{
 						Mcc: "310",
 						Mnc: "560",
@@ -1362,7 +1396,7 @@ func nssfConfig() error {
 					Mcc: "440",
 					Mnc: "10",
 				},
-				MappingOfSnssai: []models.MappingOfSnssai{{
+				MappingOfSnssai: []models.Nssf_NSSel_MappingOfSnssai{{
 					ServingSnssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "000001",
@@ -1405,7 +1439,7 @@ func nssfConfig() error {
 					Mcc: "310",
 					Mnc: "560",
 				},
-				MappingOfSnssai: []models.MappingOfSnssai{{
+				MappingOfSnssai: []models.Nssf_NSSel_MappingOfSnssai{{
 					ServingSnssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "000001",
@@ -1589,4 +1623,73 @@ func chfConfig() error {
 		return err
 	}
 	return nil
+}
+
+// nefAppWrapper adapts *nef_service.NefApp to the test/app.NetworkFunction
+type nefAppWrapper struct {
+	inner *nef_service.NefApp
+}
+
+func (w *nefAppWrapper) SetLogEnable(enable bool)          { w.inner.SetLogEnable(enable) }
+func (w *nefAppWrapper) SetLogLevel(level string)          { w.inner.SetLogLevel(level) }
+func (w *nefAppWrapper) SetReportCaller(reportCaller bool) { w.inner.SetReportCaller(reportCaller) }
+func (w *nefAppWrapper) Terminate()                        { w.inner.Terminate() }
+func (w *nefAppWrapper) Start() {
+	if err := w.inner.Start(); err != nil {
+		fmt.Printf("NEF Start() returned error: %v\n", err)
+	}
+}
+
+func NewNefStruct(ctx context.Context) app.NFstruct {
+	cfg, err := nefConfig()
+	if err != nil {
+		fmt.Printf("NEF Config failed: %v\n", err)
+	}
+	nef_ctx, nef_cancel := context.WithCancel(ctx)
+	nefApp, errApp := nef_service.NewApp(nef_ctx, cfg, "")
+	if errApp != nil {
+		fmt.Printf("NEF NewApp failed: %v\n", errApp)
+	} else {
+		// Pre-configure UDR URI for test environment to skip NRF discovery
+		nefApp.Context().SetUdrDrUri("http://127.0.0.4:8000")
+	}
+
+	return app.NFstruct{
+		Nf:     &nefAppWrapper{inner: nefApp},
+		Ctx:    &nef_ctx,
+		Cancel: &nef_cancel,
+	}
+}
+
+func nefConfig() (*nef_factory.Config, error) {
+	cfg := &nef_factory.Config{
+		Info: &nef_factory.Info{
+			Version:     "1.0.1",
+			Description: "NEF initial test configuration",
+		},
+		Configuration: &nef_factory.Configuration{
+			Sbi: &nef_factory.Sbi{
+				Scheme:       "http",
+				RegisterIPv4: "127.0.0.5",
+				BindingIPv4:  "127.0.0.5",
+				Port:         8000,
+			},
+			NrfUri:     "http://127.0.0.10:8000",
+			NrfCertPem: "../cert/nrf.pem",
+			ServiceList: []nef_factory.Service{
+				{ServiceName: nef_factory.ServiceNefCallback},
+				{ServiceName: nef_factory.ServiceTraffInflu},
+			},
+		},
+		Logger: &nef_factory.Logger{
+			Enable:       true,
+			Level:        "info",
+			ReportCaller: false,
+		},
+	}
+
+	if _, err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }

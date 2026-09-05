@@ -9,7 +9,7 @@ import (
 	"test"
 	"test/consumerTestdata/UDM/TestGenAuthData"
 
-	"github.com/free5gc/nas/security"
+	nasMessage "github.com/free5gc/nas/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/stretchr/testify/require"
 )
@@ -20,61 +20,63 @@ const (
 	testAusfInstanceID = "00000000-0000-4000-8000-000000000000"
 )
 
-// TestSCPDirectProxy verifies that the SCP direct proxy can route service API
-// requests to the expected NF producers. It prepares a UE authentication
-// subscription in MongoDB, then sends requests through the SCP endpoint for:
-// 1. UDR authentication subscription lookup,
-// 2. UDM authentication vector generation, and
-// 3. AUSF UE authentication context creation.
-// Each subtest confirms both the HTTP status returned by the proxied NF and
-// the key response fields needed by the authentication flow.
+// TestSCPDirectProxy verifies the R17 direct-proxy paths from SCP to UDR, UDM,
+// and AUSF. Each request exercises the real producer while entering through SCP.
 func TestSCPDirectProxy(t *testing.T) {
-	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
-	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
+	ue := test.NewRanUeContext(
+		"imsi-208930000007487",
+		1,
+		nasMessage.AlgCiphering128NEA0,
+		nasMessage.AlgIntegrity128NIA2,
+		models.AccessType_3_GPP_ACCESS,
+	)
+	ue.AuthenticationSubs = test.GetAuthSubscription(
+		TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
-		TestGenAuthData.MilenageTestSet19.OP)
-	servingPlmnId := "20893"
+		TestGenAuthData.MilenageTestSet19.OP,
+	)
+	servingPlmnID := "20893"
 
 	defer func() {
-		test.DelUeFromMongoDB(t, ue, servingPlmnId)
+		test.DelUeFromMongoDB(t, ue, servingPlmnID)
 		NfTerminate()
 	}()
 
-	test.DelUeFromMongoDB(t, ue, servingPlmnId)
-	test.InsertUeToMongoDB(t, ue, servingPlmnId)
+	test.DelUeFromMongoDB(t, ue, servingPlmnID)
+	test.InsertUeToMongoDB(t, ue, servingPlmnID)
 
 	t.Run("nudr-dr authentication subscription", func(t *testing.T) {
-		resp, err := http.Get(scpBaseURL + "/nudr-dr/v1/subscription-data/" +
+		resp, err := http.Get(scpBaseURL + "/nudr-dr/v2/subscription-data/" +
 			ue.Supi + "/authentication-data/authentication-subscription")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var authSubs models.AuthenticationSubscription
+		var authSubs models.Udr_DR_AuthenticationSubscription
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authSubs))
 		require.Equal(t, ue.AuthenticationSubs.EncPermanentKey, authSubs.EncPermanentKey)
 		require.Equal(t, ue.AuthenticationSubs.EncOpcKey, authSubs.EncOpcKey)
 	})
 
 	t.Run("nudm-ueau generate auth data", func(t *testing.T) {
-		reqBody := models.UdmUeauAuthenticationInfoRequest{
+		reqBody := models.Udm_UEAU_AuthenticationInfoRequest{
 			ServingNetworkName: servingNetworkName,
 			AusfInstanceId:     testAusfInstanceID,
 		}
-		resp := postJSON(t, scpBaseURL+"/nudm-ueau/v1/"+ue.Supi+"/security-information/generate-auth-data", reqBody)
+		resp := postJSON(t, scpBaseURL+"/nudm-ueau/v1/"+ue.Supi+
+			"/security-information/generate-auth-data", reqBody)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var authInfo models.UdmUeauAuthenticationInfoResult
+		var authInfo models.Udm_UEAU_AuthenticationInfoResult
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authInfo))
 		require.Equal(t, ue.Supi, authInfo.Supi)
-		require.Equal(t, models.UdmUeauAuthType__5_G_AKA, authInfo.AuthType)
+		require.Equal(t, models.Udm_UEAU_AuthType_5_G_AKA, authInfo.AuthType)
 		require.NotNil(t, authInfo.AuthenticationVector)
 	})
 
 	t.Run("nausf-auth ue authentication", func(t *testing.T) {
-		reqBody := models.AuthenticationInfo{
+		reqBody := models.Ausf_UEAU_AuthenticationInfo{
 			SupiOrSuci:         ue.Supi,
 			ServingNetworkName: servingNetworkName,
 		}
@@ -82,9 +84,9 @@ func TestSCPDirectProxy(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		var authCtx models.UeAuthenticationCtx
+		var authCtx models.Ausf_UEAU_UEAuthenticationCtx
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&authCtx))
-		require.Equal(t, models.AusfUeAuthenticationAuthType__5_G_AKA, authCtx.AuthType)
+		require.Equal(t, models.Ausf_UEAU_AuthType_5_G_AKA, authCtx.AuthType)
 		require.Equal(t, servingNetworkName, authCtx.ServingNetworkName)
 		require.NotEmpty(t, authCtx.Links["5g-aka"])
 	})

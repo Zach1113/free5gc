@@ -3,29 +3,25 @@ package test_test
 import (
 	"encoding/hex"
 	"fmt"
-	"net"
-	"sync"
-	"test"
-	"test/consumerTestdata/UDM/TestGenAuthData"
-	"test/nasTestpacket"
-	"testing"
-	"time"
-
-	"github.com/calee0219/fatal"
-	"github.com/free5gc/aper"
-	"github.com/free5gc/nas"
-	"github.com/free5gc/nas/nasMessage"
-	"github.com/free5gc/nas/nasType"
-	"github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
-	"github.com/free5gc/ngap/ngapConvert"
-	"github.com/free5gc/ngap/ngapType"
+	nasIE "github.com/free5gc/nas/ie"
+	nasMessage "github.com/free5gc/nas/message"
+	"github.com/free5gc/ngap/aper"
+	ngapIE "github.com/free5gc/ngap/ie"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/sctp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+	"net"
+	"sync"
+	"test"
+	"test/consumerTestdata/UDM/TestGenAuthData"
+	"test/nasTestpacket"
+	"test/ngapTestpacket"
+	"testing"
+	"time"
 )
 
 const (
@@ -126,7 +122,7 @@ func nGsSetup(t *testing.T, MranConn *sctp.SCTPConn, SranConn *sctp.SCTPConn) {
 	var recvMsg = make([]byte, 2048)
 
 	// send Master RAN NGSetupRequest Msg
-	sendMsg, err := test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "MasterRAN")
+	sendMsg, err := test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "MasterRAN", "", "\x01", "\xfe\xdc\xba")
 	assert.Nil(t, err)
 	_, err = MranConn.Write(sendMsg)
 	assert.Nil(t, err)
@@ -134,12 +130,12 @@ func nGsSetup(t *testing.T, MranConn *sctp.SCTPConn, SranConn *sctp.SCTPConn) {
 	// receive Master RAN NGSetupResponse Msg
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 
 	// send Second RAN NGSetupRequest Msg
-	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x03\x04"), 24, "SecondRAN")
+	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x03\x04"), 24, "SecondRAN", "\x00\x00\x11", "\x01", "\xfe\xdc\xba")
 	assert.Nil(t, err)
 	_, err = SranConn.Write(sendMsg)
 	assert.Nil(t, err)
@@ -147,9 +143,9 @@ func nGsSetup(t *testing.T, MranConn *sctp.SCTPConn, SranConn *sctp.SCTPConn) {
 	// receive Second RAN NGSetupResponse Msg
 	n, err = SranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome && ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodeNGSetup, "No NGSetupResponse received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeNGSetup, "No NGSetupResponse received.")
 }
 
 func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.RanUeContext {
@@ -159,8 +155,8 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	var err error
 
 	// New UE
-	ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+	ue := test.NewRanUeContext("imsi-208930000007487", 1, nasMessage.AlgCiphering128NEA0, nasMessage.AlgIntegrity128NIA2,
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = 1
 	ue.AuthenticationSubs = test.GetAuthSubscription(TestGenAuthData.MilenageTestSet19.K,
 		TestGenAuthData.MilenageTestSet19.OPC,
@@ -171,14 +167,11 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	test.InsertUeToMongoDB(t, ue, servingPlmnId)
 
 	// send InitialUeMessage(Registration Request)(imsi-208930000007487)
-	mobileIdentity5GS := nasType.MobileIdentity5GS{
-		Len:    13, // suci
-		Buffer: []uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78},
-	}
+	mobileIdentity5GS := nasTestpacket.MobileIdentity5GS([]uint8{0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x78})
 
 	ueSecurityCapability := ue.GetUESecurityCapability()
 	registrationRequest := nasTestpacket.GetRegistrationRequest(
-		nasMessage.RegistrationType5GSInitialRegistration, mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
+		nasIE.RegType_InitialReg, mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
 	sendMsg, err = test.GetInitialUEMessage(ue.RanUeNgapId, registrationRequest, "")
 	assert.Nil(t, err)
 	_, err = MranConn.Write(sendMsg)
@@ -187,17 +180,16 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	// receive NAS Authentication Request Msg
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage && ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeDownlinkNASTransport, "No NAS Authentication Request received.")
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage && ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeDownlinkNASTransport, "No NAS Authentication Request received.")
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
-	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
-	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeAuthenticationRequest,
+	require.Equal(t, nasPdu.MsgType(), nasMessage.MsgTypeAuthReq,
 		"Received wrong GMM message. Expected Authentication Request.")
-	rand := nasPdu.AuthenticationRequest.GetRANDValue()
+	rand := nasPdu.(*nasMessage.AuthReq).AuthParamRAND5GAuthChlg.Rand
 	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand[:], "5G:mnc093.mcc208.3gppnetwork.org")
 
 	// send NAS Authentication Response
@@ -210,20 +202,19 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	// receive NAS Security Mode Command Msg
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
 	assert.NotNil(t, ngapPdu)
-	nasPdu = test.GetNasPdu(ue, ngapPdu.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu = test.GetNasPdu(ue, ngapPdu.(*ngapMessage.DownlinkNASTransport))
 	require.NotNil(t, nasPdu)
-	require.NotNil(t, nasPdu.GmmMessage, "GMM message is nil")
-	require.Equal(t, nasPdu.GmmHeader.GetMessageType(), nas.MsgTypeSecurityModeCommand,
+	require.Equal(t, nasPdu.MsgType(), nasMessage.MsgTypeSecModeCmd,
 		"Received wrong GMM message. Expected Security Mode Command.")
 
 	// send NAS Security Mode Complete Msg
-	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
+	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasIE.RegType_InitialReg,
 		mobileIdentity5GS, nil, ueSecurityCapability, ue.Get5GMMCapability(), nil, nil)
 	pdu = nasTestpacket.GetSecurityModeComplete(registrationRequestWith5GMM)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCipheredWithNew5gNasSecurityContext, true, true)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCipheredWithNew5gNasSecCtx, true, true)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)
@@ -233,10 +224,10 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 	// receive ngap Initial Context Setup Request Msg
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err = ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodeInitialContextSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodeInitialContextSetup,
 		"No InitialContextSetup received.")
 
 	// send ngap Initial Context Setup Response Msg
@@ -247,7 +238,7 @@ func newUEAndInitialRegistration(t *testing.T, MranConn *sctp.SCTPConn) *test.Ra
 
 	// send NAS Registration Complete Msg
 	pdu = nasTestpacket.GetRegistrationComplete(nil)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)
@@ -268,125 +259,14 @@ func pduSessionEstablishment(t *testing.T, ue *test.RanUeContext, MranConn *sctp
 	var recvMsg = make([]byte, 2048)
 	var err error
 
-	buildPDUSessionResourceSetupResponseTransferWithDC := func() ngapType.PDUSessionResourceSetupResponseTransfer {
-		var data ngapType.PDUSessionResourceSetupResponseTransfer
-		// QoS Flow per TNL Information
-		qosFlowPerTNLInformation := &data.DLQosFlowPerTNLInformation
-		qosFlowPerTNLInformation.UPTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-
-		// UP Transport Layer Information in QoS Flow per TNL Information
-		upTransportLayerInformation := &qosFlowPerTNLInformation.UPTransportLayerInformation
-		upTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-		upTransportLayerInformation.GTPTunnel = new(ngapType.GTPTunnel)
-		upTransportLayerInformation.GTPTunnel.GTPTEID.Value = aper.OctetString(mranDLTeid)
-		upTransportLayerInformation.GTPTunnel.TransportLayerAddress = ngapConvert.IPAddressToNgap(mranN3Addr, "")
-
-		// Associated QoS Flow List in QoS Flow per TNL Information
-		associatedQosFlowList := &qosFlowPerTNLInformation.AssociatedQosFlowList
-
-		associatedQosFlowItem := ngapType.AssociatedQosFlowItem{}
-		associatedQosFlowItem.QosFlowIdentifier.Value = 1
-		associatedQosFlowList.List = append(associatedQosFlowList.List, associatedQosFlowItem)
-
+	getPDUSessionResourceSetupResponseWithDC := func(pduSessionID, amfUeNgapID, ranUeNgapID int64) ([]byte, error) {
+		message := ngapTestpacket.BuildPDUSessionResourceSetupResponseWithDC(
+			pduSessionID, amfUeNgapID, ranUeNgapID, mranN3Addr, mranDLTeid, "", "")
 		if enableDC {
-			// DC QoS Flow per TNL Information
-			DCQosFlowPerTNLInformationItem := ngapType.QosFlowPerTNLInformationItem{}
-			DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-
-			// DC Transport Layer Information in QoS Flow per TNL Information
-			DCUpTransportLayerInformation := &DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation
-			DCUpTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-			DCUpTransportLayerInformation.GTPTunnel = new(ngapType.GTPTunnel)
-			DCUpTransportLayerInformation.GTPTunnel.GTPTEID.Value = aper.OctetString(sranDLTeid)
-			DCUpTransportLayerInformation.GTPTunnel.TransportLayerAddress = ngapConvert.IPAddressToNgap(sranN3Addr, "")
-
-			// DC Associated QoS Flow List in QoS Flow per TNL Information
-			DCAssociatedQosFlowList := &DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.AssociatedQosFlowList
-			DCAssociatedQosFlowItem := ngapType.AssociatedQosFlowItem{}
-			DCAssociatedQosFlowItem.QosFlowIdentifier.Value = 1
-			DCAssociatedQosFlowList.List = append(DCAssociatedQosFlowList.List, DCAssociatedQosFlowItem)
-
-			// Additional DL QoS Flow per TNL Information
-			data.AdditionalDLQosFlowPerTNLInformation = new(ngapType.QosFlowPerTNLInformationList)
-			data.AdditionalDLQosFlowPerTNLInformation.List = append(data.AdditionalDLQosFlowPerTNLInformation.List, DCQosFlowPerTNLInformationItem)
+			message = ngapTestpacket.BuildPDUSessionResourceSetupResponseWithDC(
+				pduSessionID, amfUeNgapID, ranUeNgapID, mranN3Addr, mranDLTeid, sranN3Addr, sranDLTeid)
 		}
-
-		return data
-	}
-
-	getPDUSessionResourceSetupResponseTransferWithDC := func() []byte {
-		data := buildPDUSessionResourceSetupResponseTransferWithDC()
-		encodeData, err := aper.MarshalWithParams(data, "valueExt")
-		if err != nil {
-			fatal.Fatalf("aper MarshalWithParams error in GetPDUSessionResourceSetupResponseTransfer: %+v", err)
-		}
-		return encodeData
-	}
-
-	buildPDUSessionResourceSetupResponseForRegistrationTestWithDC := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) (pdu ngapType.NGAPPDU) {
-		pdu.Present = ngapType.NGAPPDUPresentSuccessfulOutcome
-		pdu.SuccessfulOutcome = new(ngapType.SuccessfulOutcome)
-
-		successfulOutcome := pdu.SuccessfulOutcome
-		successfulOutcome.ProcedureCode.Value = ngapType.ProcedureCodePDUSessionResourceSetup
-		successfulOutcome.Criticality.Value = ngapType.CriticalityPresentReject
-
-		successfulOutcome.Value.Present = ngapType.SuccessfulOutcomePresentPDUSessionResourceSetupResponse
-		successfulOutcome.Value.PDUSessionResourceSetupResponse = new(ngapType.PDUSessionResourceSetupResponse)
-
-		pDUSessionResourceSetupResponse := successfulOutcome.Value.PDUSessionResourceSetupResponse
-		pDUSessionResourceSetupResponseIEs := &pDUSessionResourceSetupResponse.ProtocolIEs
-
-		// AMF UE NGAP ID
-		ie := ngapType.PDUSessionResourceSetupResponseIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDAMFUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PDUSessionResourceSetupResponseIEsPresentAMFUENGAPID
-		ie.Value.AMFUENGAPID = new(ngapType.AMFUENGAPID)
-
-		aMFUENGAPID := ie.Value.AMFUENGAPID
-		aMFUENGAPID.Value = amfUeNgapId
-
-		pDUSessionResourceSetupResponseIEs.List = append(pDUSessionResourceSetupResponseIEs.List, ie)
-
-		// RAN UE NGAP ID
-		ie = ngapType.PDUSessionResourceSetupResponseIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDRANUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PDUSessionResourceSetupResponseIEsPresentRANUENGAPID
-		ie.Value.RANUENGAPID = new(ngapType.RANUENGAPID)
-
-		rANUENGAPID := ie.Value.RANUENGAPID
-		rANUENGAPID.Value = ranUeNgapId
-
-		pDUSessionResourceSetupResponseIEs.List = append(pDUSessionResourceSetupResponseIEs.List, ie)
-
-		// PDU Session Resource Setup Response List
-		ie = ngapType.PDUSessionResourceSetupResponseIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDPDUSessionResourceSetupListSURes
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PDUSessionResourceSetupResponseIEsPresentPDUSessionResourceSetupListSURes
-		ie.Value.PDUSessionResourceSetupListSURes = new(ngapType.PDUSessionResourceSetupListSURes)
-
-		pDUSessionResourceSetupListSURes := ie.Value.PDUSessionResourceSetupListSURes
-
-		// PDU Session Resource Setup Response Item in PDU Session Resource Setup Response List
-		pDUSessionResourceSetupItemSURes := ngapType.PDUSessionResourceSetupItemSURes{}
-		pDUSessionResourceSetupItemSURes.PDUSessionID.Value = pduSessionId
-
-		pDUSessionResourceSetupItemSURes.PDUSessionResourceSetupResponseTransfer =
-			getPDUSessionResourceSetupResponseTransferWithDC()
-
-		pDUSessionResourceSetupListSURes.List = append(pDUSessionResourceSetupListSURes.List, pDUSessionResourceSetupItemSURes)
-
-		pDUSessionResourceSetupResponseIEs.List = append(pDUSessionResourceSetupResponseIEs.List, ie)
-
-		return pdu
-	}
-
-	getPDUSessionResourceSetupResponseWithDC := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) ([]byte, error) {
-		message := buildPDUSessionResourceSetupResponseForRegistrationTestWithDC(pduSessionId, amfUeNgapId, ranUeNgapId)
-		return ngap.Encoder(message)
+		return message.MarshalBinary()
 	}
 
 	// send GetPduSessionEstablishmentRequest Msg
@@ -394,8 +274,8 @@ func pduSessionEstablishment(t *testing.T, ue *test.RanUeContext, MranConn *sctp
 		Sst: 1,
 		Sd:  "fedcba",
 	}
-	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(10, nasMessage.ULNASTransportRequestTypeInitialRequest, "internet", &sNssai)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu := nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(10, nasIE.ReqType_InitialReq, "internet", &sNssai)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nasMessage.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	assert.Nil(t, err)
 	sendMsg, err = test.GetUplinkNASTransport(ue.AmfUeNgapId, ue.RanUeNgapId, pdu)
 	assert.Nil(t, err)
@@ -405,10 +285,10 @@ func pduSessionEstablishment(t *testing.T, ue *test.RanUeContext, MranConn *sctp
 	// receive ngap PDU Session Resource Setup Request Msg
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentInitiatingMessage &&
-		ngapPdu.InitiatingMessage.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceSetup,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeInitiatingMessage &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceSetup,
 		"No PDU Session Resource Setup Request received.")
 
 	// send ngap PDU Session Resource Setup Response Msg
@@ -478,115 +358,14 @@ func pduSessionModifyIndication(t *testing.T, ue *test.RanUeContext, MranConn *s
 	var recvMsg = make([]byte, 2048)
 	var err error
 
-	buildPDUSessionResourceModifyIndicationTransferWithDC := func() ngapType.PDUSessionResourceModifyIndicationTransfer {
-		var data ngapType.PDUSessionResourceModifyIndicationTransfer
-		// QoS Flow per TNL Information
-		qosFlowPerTNLInformation := &data.DLQosFlowPerTNLInformation
-		qosFlowPerTNLInformation.UPTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-
-		// UP Transport Layer Information in QoS Flow per TNL Information
-		upTransportLayerInformation := &qosFlowPerTNLInformation.UPTransportLayerInformation
-		upTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-		upTransportLayerInformation.GTPTunnel = new(ngapType.GTPTunnel)
-		upTransportLayerInformation.GTPTunnel.GTPTEID.Value = aper.OctetString(mranDLTeid)
-		upTransportLayerInformation.GTPTunnel.TransportLayerAddress = ngapConvert.IPAddressToNgap(mranN3Addr, "")
-
-		// Associated QoS Flow List in QoS Flow per TNL Information
-		associatedQosFlowList := &qosFlowPerTNLInformation.AssociatedQosFlowList
-
-		associatedQosFlowItem := ngapType.AssociatedQosFlowItem{}
-		associatedQosFlowItem.QosFlowIdentifier.Value = 1
-		associatedQosFlowList.List = append(associatedQosFlowList.List, associatedQosFlowItem)
-
+	getPDUSessionResourceModifyIndication := func(pduSessionID, amfUeNgapID, ranUeNgapID int64) ([]byte, error) {
+		secondaryIP, secondaryTEID := "", ""
 		if enableDC {
-			// DC QoS Flow per TNL Information
-			DCQosFlowPerTNLInformationItem := ngapType.QosFlowPerTNLInformationItem{}
-			DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-
-			// DC Transport Layer Information in QoS Flow per TNL Information
-			DCUpTransportLayerInformation := &DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation
-			DCUpTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-			DCUpTransportLayerInformation.GTPTunnel = new(ngapType.GTPTunnel)
-			DCUpTransportLayerInformation.GTPTunnel.GTPTEID.Value = aper.OctetString(sranDLTeid)
-			DCUpTransportLayerInformation.GTPTunnel.TransportLayerAddress = ngapConvert.IPAddressToNgap(sranN3Addr, "")
-
-			// DC Associated QoS Flow List in QoS Flow per TNL Information
-			DCAssociatedQosFlowList := &DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.AssociatedQosFlowList
-			DCAssociatedQosFlowItem := ngapType.AssociatedQosFlowItem{}
-			DCAssociatedQosFlowItem.QosFlowIdentifier.Value = 1
-			DCAssociatedQosFlowList.List = append(DCAssociatedQosFlowList.List, DCAssociatedQosFlowItem)
-
-			// Additional DL QoS Flow per TNL Information
-			data.AdditionalDLQosFlowPerTNLInformation = new(ngapType.QosFlowPerTNLInformationList)
-			data.AdditionalDLQosFlowPerTNLInformation.List = append(data.AdditionalDLQosFlowPerTNLInformation.List, DCQosFlowPerTNLInformationItem)
+			secondaryIP, secondaryTEID = sranN3Addr, sranDLTeid
 		}
-
-		return data
-	}
-
-	getPDUSessionResourceModifyIndicationTransferWithDC := func() []byte {
-		data := buildPDUSessionResourceModifyIndicationTransferWithDC()
-		encodeData, err := aper.MarshalWithParams(data, "valueExt")
-		if err != nil {
-			fatal.Fatalf("aper MarshalWithParams error in GetPDUSessionResourceModifyIndicationTransfer: %+v", err)
-		}
-		return encodeData
-	}
-
-	buildPDUSessionResourceModifyIndication := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) (pdu ngapType.NGAPPDU) {
-		pdu.Present = ngapType.NGAPPDUPresentInitiatingMessage
-		pdu.InitiatingMessage = new(ngapType.InitiatingMessage)
-
-		initiatingMessage := pdu.InitiatingMessage
-		initiatingMessage.ProcedureCode.Value = ngapType.ProcedureCodePDUSessionResourceModifyIndication
-		initiatingMessage.Criticality.Value = ngapType.CriticalityPresentReject
-
-		initiatingMessage.Value.Present = ngapType.InitiatingMessagePresentPDUSessionResourceModifyIndication
-		initiatingMessage.Value.PDUSessionResourceModifyIndication = new(ngapType.PDUSessionResourceModifyIndication)
-
-		indication := initiatingMessage.Value.PDUSessionResourceModifyIndication
-		indicationIEs := &indication.ProtocolIEs
-
-		// AMF UE NGAP ID
-		ie := ngapType.PDUSessionResourceModifyIndicationIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDAMFUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PDUSessionResourceModifyIndicationIEsPresentAMFUENGAPID
-		ie.Value.AMFUENGAPID = new(ngapType.AMFUENGAPID)
-		ie.Value.AMFUENGAPID.Value = amfUeNgapId
-		indicationIEs.List = append(indicationIEs.List, ie)
-
-		// RAN UE NGAP ID
-		ie = ngapType.PDUSessionResourceModifyIndicationIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDRANUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PDUSessionResourceModifyIndicationIEsPresentRANUENGAPID
-		ie.Value.RANUENGAPID = new(ngapType.RANUENGAPID)
-		ie.Value.RANUENGAPID.Value = ranUeNgapId
-		indicationIEs.List = append(indicationIEs.List, ie)
-
-		// PDU Session Resource Modify List
-		ie = ngapType.PDUSessionResourceModifyIndicationIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDPDUSessionResourceModifyListModInd
-		ie.Criticality.Value = ngapType.CriticalityPresentReject
-		ie.Value.Present = ngapType.PDUSessionResourceModifyIndicationIEsPresentPDUSessionResourceModifyListModInd
-		ie.Value.PDUSessionResourceModifyListModInd = new(ngapType.PDUSessionResourceModifyListModInd)
-
-		modifyItem := ngapType.PDUSessionResourceModifyItemModInd{}
-		modifyItem.PDUSessionID.Value = pduSessionId
-		modifyItem.PDUSessionResourceModifyIndicationTransfer = getPDUSessionResourceModifyIndicationTransferWithDC()
-
-		ie.Value.PDUSessionResourceModifyListModInd.List = append(
-			ie.Value.PDUSessionResourceModifyListModInd.List, modifyItem)
-
-		indicationIEs.List = append(indicationIEs.List, ie)
-
-		return pdu
-	}
-
-	getPDUSessionResourceModifyIndication := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) ([]byte, error) {
-		message := buildPDUSessionResourceModifyIndication(pduSessionId, amfUeNgapId, ranUeNgapId)
-		return ngap.Encoder(message)
+		message := ngapTestpacket.BuildPDUSessionResourceModifyIndicationWithDC(
+			pduSessionID, amfUeNgapID, ranUeNgapID, mranN3Addr, mranDLTeid, secondaryIP, secondaryTEID)
+		return message.MarshalBinary()
 	}
 
 	// send pdu session resource modify indication
@@ -598,22 +377,19 @@ func pduSessionModifyIndication(t *testing.T, ue *test.RanUeContext, MranConn *s
 	// receive pdu session resource modify confirm
 	n, err = MranConn.Read(recvMsg)
 	assert.Nil(t, err)
-	ngapPdu, err := ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	assert.Nil(t, err)
-	assert.True(t, ngapPdu.Present == ngapType.NGAPPDUPresentSuccessfulOutcome &&
-		ngapPdu.SuccessfulOutcome.ProcedureCode.Value == ngapType.ProcedureCodePDUSessionResourceModifyIndication,
+	assert.True(t, ngapPdu.MessageType() == ngapMessage.MessageTypeSuccessfulOutcome &&
+		ngapPdu.ProcedureCode() == ngapMessage.ProcedureCodePDUSessionResourceModifyIndication,
 		"No PDU Session Resource Modify Confirm received.")
 
-	// check successful outcome
-	for _, ie := range ngapPdu.SuccessfulOutcome.Value.PDUSessionResourceModifyConfirm.ProtocolIEs.List {
-		switch ie.Id.Value {
-		case ngapType.ProtocolIEIDAMFUENGAPID:
-		case ngapType.ProtocolIEIDRANUENGAPID:
-		case ngapType.ProtocolIEIDPDUSessionResourceModifyListModCfm:
-			t.Log("PDU session modify indication request successful")
-		case ngapType.ProtocolIEIDPDUSessionResourceFailedToModifyListModCfm:
-			t.Fatalf("PDU session modify indication request failed")
-		}
+	confirm, ok := ngapPdu.(*ngapMessage.PDUSessionResourceModifyConfirm)
+	require.True(t, ok)
+	if confirm.PDUSessionResourceFailedToModifyListModCfm != nil {
+		t.Fatalf("PDU session modify indication request failed")
+	}
+	if confirm.PDUSessionResourceModifyListModCfm != nil {
+		t.Log("PDU session modify indication request successful")
 	}
 
 	time.Sleep(1 * time.Second)
@@ -625,208 +401,10 @@ func pathSwitchWithDC(t *testing.T, ue *test.RanUeContext, MranConn *sctp.SCTPCo
 	var recvMsg = make([]byte, 2048)
 	var err error
 
-	buildPathSwitchRequestTransferWithDC := func() ngapType.PathSwitchRequestTransfer {
-		var data ngapType.PathSwitchRequestTransfer
-
-		// DL NG-U UP TNL information
-		upTransportLayerInformation := &data.DLNGUUPTNLInformation
-		upTransportLayerInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-		upTransportLayerInformation.GTPTunnel = new(ngapType.GTPTunnel)
-		upTransportLayerInformation.GTPTunnel.GTPTEID.Value = aper.OctetString(tMranDLTeid)
-		upTransportLayerInformation.GTPTunnel.TransportLayerAddress = ngapConvert.IPAddressToNgap(tMranN3Addr, "")
-
-		// Qos Flow Accepted List
-		qosFlowAcceptedList := &data.QosFlowAcceptedList
-		qosFlowAcceptedItem := ngapType.QosFlowAcceptedItem{
-			QosFlowIdentifier: ngapType.QosFlowIdentifier{
-				Value: 1,
-			},
-		}
-		qosFlowAcceptedList.List = append(qosFlowAcceptedList.List, qosFlowAcceptedItem)
-
-		// Additional DL QoS Flow per TNL Information at IE Extensions
-		data.IEExtensions = new(ngapType.ProtocolExtensionContainerPathSwitchRequestTransferExtIEs)
-		data.IEExtensions.List = append(data.IEExtensions.List, ngapType.PathSwitchRequestTransferExtIEs{
-			Id: ngapType.ProtocolExtensionID{
-				Value: ngapType.ProtocolIEIDAdditionalDLQosFlowPerTNLInformation,
-			},
-			Criticality: ngapType.Criticality{
-				Value: ngapType.CriticalityPresentIgnore,
-			},
-			ExtensionValue: ngapType.PathSwitchRequestTransferExtIEsExtensionValue{
-				Present: ngapType.PathSwitchRequestTransferExtIEsPresentAdditionalDLQosFlowPerTNLInformation,
-				AdditionalDLQosFlowPerTNLInformation: &ngapType.QosFlowPerTNLInformationList{
-					List: []ngapType.QosFlowPerTNLInformationItem{
-						{
-							QosFlowPerTNLInformation: ngapType.QosFlowPerTNLInformation{
-								UPTransportLayerInformation: ngapType.UPTransportLayerInformation{
-									Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
-									GTPTunnel: &ngapType.GTPTunnel{
-										GTPTEID: ngapType.GTPTEID{
-											Value: aper.OctetString(tSranDLTeid),
-										},
-										TransportLayerAddress: ngapConvert.IPAddressToNgap(tSranN3Addr, ""),
-									},
-								},
-								AssociatedQosFlowList: ngapType.AssociatedQosFlowList{
-									List: []ngapType.AssociatedQosFlowItem{
-										{
-											QosFlowIdentifier: ngapType.QosFlowIdentifier{
-												Value: 1,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		})
-		return data
-	}
-
-	getPathSwitchRequestTransferWithDC := func() []byte {
-		data := buildPathSwitchRequestTransferWithDC()
-		encodeData, err := aper.MarshalWithParams(data, "valueExt")
-		if err != nil {
-			fatal.Fatalf("aper MarshalWithParams error in GetPathSwitchRequestTransferWithDC: %+v", err)
-		}
-		return encodeData
-	}
-
-	buildPathSwitchRequestWithDC := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) (pdu ngapType.NGAPPDU) {
-		pdu.Present = ngapType.NGAPPDUPresentInitiatingMessage
-		pdu.InitiatingMessage = new(ngapType.InitiatingMessage)
-
-		initiatingMessage := pdu.InitiatingMessage
-		initiatingMessage.ProcedureCode.Value = ngapType.ProcedureCodePathSwitchRequest
-		initiatingMessage.Criticality.Value = ngapType.CriticalityPresentReject
-
-		initiatingMessage.Value.Present = ngapType.InitiatingMessagePresentPathSwitchRequest
-		initiatingMessage.Value.PathSwitchRequest = new(ngapType.PathSwitchRequest)
-
-		pathSwitchRequest := initiatingMessage.Value.PathSwitchRequest
-		pathSwitchRequestIEs := &pathSwitchRequest.ProtocolIEs
-
-		// RAN UE NGAP ID
-		ie := ngapType.PathSwitchRequestIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDRANUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentReject
-		ie.Value.Present = ngapType.PathSwitchRequestIEsPresentRANUENGAPID
-		ie.Value.RANUENGAPID = new(ngapType.RANUENGAPID)
-
-		rANUENGAPID := ie.Value.RANUENGAPID
-		rANUENGAPID.Value = ranUeNgapId
-
-		pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		// Source AMF UE NGAP ID
-		ie = ngapType.PathSwitchRequestIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDSourceAMFUENGAPID
-		ie.Criticality.Value = ngapType.CriticalityPresentReject
-		ie.Value.Present = ngapType.PathSwitchRequestIEsPresentSourceAMFUENGAPID
-		ie.Value.SourceAMFUENGAPID = new(ngapType.AMFUENGAPID)
-
-		aMFUENGAPID := ie.Value.SourceAMFUENGAPID
-		aMFUENGAPID.Value = amfUeNgapId
-
-		pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		// User Location Information
-		ie = ngapType.PathSwitchRequestIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDUserLocationInformation
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PathSwitchRequestIEsPresentUserLocationInformation
-		ie.Value.UserLocationInformation = new(ngapType.UserLocationInformation)
-
-		userLocationInformation := ie.Value.UserLocationInformation
-		userLocationInformation.Present = ngapType.UserLocationInformationPresentUserLocationInformationNR
-		userLocationInformation.UserLocationInformationNR = new(ngapType.UserLocationInformationNR)
-
-		userLocationInformationNR := userLocationInformation.UserLocationInformationNR
-		userLocationInformationNR.NRCGI.PLMNIdentity.Value = aper.OctetString("\x02\xf8\x39")
-		userLocationInformationNR.NRCGI.NRCellIdentity.Value = aper.BitString{
-			Bytes:     []byte{0x00, 0x00, 0x00, 0x00, 0x20},
-			BitLength: 36,
-		}
-
-		userLocationInformationNR.TAI.PLMNIdentity.Value = aper.OctetString("\x02\xf8\x39")
-		userLocationInformationNR.TAI.TAC.Value = aper.OctetString("\x00\x00\x11")
-
-		pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		// UE Security Capabilities
-		ie = ngapType.PathSwitchRequestIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDUESecurityCapabilities
-		ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		ie.Value.Present = ngapType.PathSwitchRequestIEsPresentUESecurityCapabilities
-		ie.Value.UESecurityCapabilities = new(ngapType.UESecurityCapabilities)
-
-		uESecurityCapabilities := ie.Value.UESecurityCapabilities
-		uESecurityCapabilities.NRencryptionAlgorithms.Value = aper.BitString{
-			Bytes:     []byte{0xff, 0xff},
-			BitLength: 16,
-		}
-		uESecurityCapabilities.NRintegrityProtectionAlgorithms.Value = aper.BitString{
-			Bytes:     []byte{0xff, 0xff},
-			BitLength: 16,
-		}
-		uESecurityCapabilities.EUTRAencryptionAlgorithms.Value = aper.BitString{
-			Bytes:     []byte{0xff, 0xff},
-			BitLength: 16,
-		}
-		uESecurityCapabilities.EUTRAintegrityProtectionAlgorithms.Value = aper.BitString{
-			Bytes:     []byte{0xff, 0xff},
-			BitLength: 16,
-		}
-
-		pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		// PDU Session Resource to be Switched in Downlink List
-		ie = ngapType.PathSwitchRequestIEs{}
-		ie.Id.Value = ngapType.ProtocolIEIDPDUSessionResourceToBeSwitchedDLList
-		ie.Criticality.Value = ngapType.CriticalityPresentReject
-		ie.Value.Present = ngapType.PathSwitchRequestIEsPresentPDUSessionResourceToBeSwitchedDLList
-		ie.Value.PDUSessionResourceToBeSwitchedDLList = new(ngapType.PDUSessionResourceToBeSwitchedDLList)
-
-		pDUSessionResourceToBeSwitchedDLList := ie.Value.PDUSessionResourceToBeSwitchedDLList
-
-		// PDU Session Resource to be Switched in Downlink Item (in PDU Session Resource to be Switched in Downlink List)
-		pDUSessionResourceToBeSwitchedDLItem := ngapType.PDUSessionResourceToBeSwitchedDLItem{}
-		pDUSessionResourceToBeSwitchedDLItem.PDUSessionID.Value = pduSessionId
-		pDUSessionResourceToBeSwitchedDLItem.PathSwitchRequestTransfer = getPathSwitchRequestTransferWithDC()
-
-		pDUSessionResourceToBeSwitchedDLList.List = append(pDUSessionResourceToBeSwitchedDLList.List, pDUSessionResourceToBeSwitchedDLItem)
-
-		pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		// PDU Session Resource Failed to Setup List
-		// ie = ngapType.PathSwitchRequestIEs{}
-		// ie.Id.Value = ngapType.ProtocolIEIDPDUSessionResourceFailedToSetupListPSReq
-		// ie.Criticality.Value = ngapType.CriticalityPresentIgnore
-		// ie.Value.Present = ngapType.PathSwitchRequestIEsPresentPDUSessionResourceFailedToSetupListPSReq
-		// ie.Value.PDUSessionResourceFailedToSetupListPSReq = new(ngapType.PDUSessionResourceFailedToSetupListPSReq)
-
-		// pDUSessionResourceFailedToSetupListPSReq := ie.Value.PDUSessionResourceFailedToSetupListPSReq
-
-		// PDU Session Resource Failed to Setup Item (in PDU Session Resource Failed to Setup List)
-		// pDUSessionResourceFailedToSetupItemPSReq := ngapType.PDUSessionResourceFailedToSetupItemPSReq{}
-		// pDUSessionResourceFailedToSetupItemPSReq.PDUSessionID.Value = 11
-		// pDUSessionResourceFailedToSetupItemPSReq.PathSwitchRequestSetupFailedTransfer = nil
-
-		// pDUSessionResourceFailedToSetupListPSReq.List =
-		// 	append(pDUSessionResourceFailedToSetupListPSReq.List, pDUSessionResourceFailedToSetupItemPSReq)
-
-		// pathSwitchRequestIEs.List = append(pathSwitchRequestIEs.List, ie)
-
-		return pdu
-	}
-
-	getPathSwitchRequestWithDC := func(pduSessionId int64, amfUeNgapId int64, ranUeNgapId int64) ([]byte, error) {
-		message := buildPathSwitchRequestWithDC(pduSessionId, amfUeNgapId, ranUeNgapId)
-		// message.InitiatingMessage.Value.PathSwitchRequest.ProtocolIEs.List = message.InitiatingMessage.Value.PathSwitchRequest.ProtocolIEs.List[0:5]
-		return ngap.Encoder(message)
+	getPathSwitchRequestWithDC := func(pduSessionID, amfUeNgapID, ranUeNgapID int64) ([]byte, error) {
+		message := ngapTestpacket.BuildPathSwitchRequestWithDC(
+			pduSessionID, amfUeNgapID, ranUeNgapID, tMranN3Addr, tMranDLTeid, tSranN3Addr, tSranDLTeid)
+		return message.MarshalBinary()
 	}
 
 	// send path switch request
@@ -845,30 +423,28 @@ func pathSwitchWithDC(t *testing.T, ue *test.RanUeContext, MranConn *sctp.SCTPCo
 		t.Fatalf("Failed to receive path switch request acknowledge from Master RAN: %+v", err)
 	}
 
-	var ngapPdu *ngapType.NGAPPDU
-	ngapPdu, err = ngap.Decoder(recvMsg[:n])
+	ngapPdu, err := ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		t.Fatalf("Failed to decode path switch request acknowledge from Master RAN: %+v", err)
 	}
 
-	for _, ie := range ngapPdu.SuccessfulOutcome.Value.PathSwitchRequestAcknowledge.ProtocolIEs.List {
-		if ie.Id.Value == ngapType.ProtocolIEIDPDUSessionResourceSwitchedList {
-			pDUSessionResourceSwitchedList := ie.Value.PDUSessionResourceSwitchedList
-			for _, pDUSessionResourceSwitchedItem := range pDUSessionResourceSwitchedList.List {
-				var data ngapType.PathSwitchRequestAcknowledgeTransfer
-				err = aper.UnmarshalWithParams(pDUSessionResourceSwitchedItem.PathSwitchRequestAcknowledgeTransfer, &data, "valueExt")
-				if err != nil {
-					t.Fatalf("Failed to unmarshal path switch request acknowledge transfer: %+v", err)
-				}
+	ack, ok := ngapPdu.(*ngapMessage.PathSwitchRequestAcknowledge)
+	require.True(t, ok)
+	for _, item := range ack.PDUSessionResourceSwitchedList.List {
+		var data ngapIE.PathSwitchRequestAcknowledgeTransfer
+		err = ngapIE.UnmarshalBinary([]byte(*item.PathSwitchRequestAcknowledgeTransfer), &data)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal path switch request acknowledge transfer: %+v", err)
+		}
 
-				uLNGUUPTNLInformation := data.ULNGUUPTNLInformation.GTPTunnel
-				assert.Equal(t, uLNGUUPTNLInformation.GTPTEID.Value, aper.OctetString("\x00\x00\x00\x02"))
-
-				for _, ieExt := range data.IEExtensions.List {
-					if ieExt.Id.Value == ngapType.ProtocolIEIDAdditionalNGUUPTNLInformation {
-						additionalULNGUUPTNLInformation := ieExt.ExtensionValue.AdditionalNGUUPTNLInformation.List[0].ULNGUUPTNLInformation
-						assert.Equal(t, additionalULNGUUPTNLInformation.GTPTunnel.GTPTEID.Value, aper.OctetString("\x00\x00\x00\x03"))
-					}
+		ulTunnel := data.ULNGUUPTNLInformation.Choice.(*ngapIE.GTPTunnel)
+		assert.Equal(t, aper.OctetString("\x00\x00\x00\x02"), ulTunnel.GTPTEID.Value)
+		if data.IEExtensions != nil {
+			for _, extension := range data.IEExtensions.List {
+				if extension.Id.Value == ngapIE.ProtocolIEIDAdditionalNGUUPTNLInformation {
+					additional := extension.AdditionalNGUUPTNLInformation.List[0].ULNGUUPTNLInformation
+					additionalTunnel := additional.Choice.(*ngapIE.GTPTunnel)
+					assert.Equal(t, aper.OctetString("\x00\x00\x00\x03"), additionalTunnel.GTPTEID.Value)
 				}
 			}
 		}

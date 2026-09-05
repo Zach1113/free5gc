@@ -140,14 +140,17 @@ for COLLECTION in "${DB_DROP_COLLECTION[@]}"
 do
     MONGO_SCRIPT+="db.$COLLECTION.drop();"
 done
-mongo "$DB_NAME" --eval "$MONGO_SCRIPT"
-mongosh "$DB_NAME" --eval "$MONGO_SCRIPT" 
+if command -v mongosh &> /dev/null; then
+    mongosh "$DB_NAME" --eval "$MONGO_SCRIPT"
+else
+    mongo "$DB_NAME" --eval "$MONGO_SCRIPT"
+fi
 
 sleep 0.1
 
 NF_LIST="nrf amf smf udr pcf udm nssf ausf chf nef"
 
-# Add SCP to the list only if enabled
+# SCP is opt-in so the default deployment topology remains unchanged.
 if [ $SCP_ENABLE -ne 0 ]; then
     NF_LIST="$NF_LIST scp"
     echo "SCP enabled - will start SCP service"

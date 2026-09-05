@@ -15,11 +15,9 @@ import (
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 
-	"github.com/free5gc/nas"
-	"github.com/free5gc/nas/nasMessage"
-	"github.com/free5gc/nas/nasType"
-	"github.com/free5gc/nas/security"
-	"github.com/free5gc/ngap"
+	"github.com/free5gc/nas/ie"
+	"github.com/free5gc/nas/message"
+	ngapMessage "github.com/free5gc/ngap/message"
 	"github.com/free5gc/openapi/models"
 )
 
@@ -100,36 +98,30 @@ func hexCharToByte(c byte) byte {
 	return 0
 }
 
-func encodeSuci(imsi []byte, mncLen int) *nasType.MobileIdentity5GS {
-	var msin []byte
-	suci := nasType.MobileIdentity5GS{
-		Buffer: []uint8{nasMessage.SupiFormatImsi<<4 |
-			nasMessage.MobileIdentity5GSTypeSuci, 0x0, 0x0, 0x0, 0xf0, 0xff, 0x00, 0x00},
-	}
-
-	// mcc & mnc
-	suci.Buffer[1] = hexCharToByte(imsi[1])<<4 | hexCharToByte(imsi[0])
+// encodeSuci builds the SUCI mobile identity. The new nas API models the SUCI
+// as structured fields (PLMN, routing indicator, scheme, MSIN digits) and does
+// the BCD packing itself, so the manual octet assembly the old version needed
+// is gone.
+func encodeSuci(imsi []byte, mncLen int) *ie.MobileId5GS {
+	mcc := string(imsi[0:3])
+	var mnc, msin string
 	if mncLen > 2 {
-		suci.Buffer[2] = hexCharToByte(imsi[3])<<4 | hexCharToByte(imsi[2])
-		suci.Buffer[3] = hexCharToByte(imsi[5])<<4 | hexCharToByte(imsi[4])
-		msin = imsi[6:]
+		mnc, msin = string(imsi[3:6]), string(imsi[6:])
 	} else {
-		suci.Buffer[2] = 0xf<<4 | hexCharToByte(imsi[2])
-		suci.Buffer[3] = hexCharToByte(imsi[4])<<4 | hexCharToByte(imsi[3])
-		msin = imsi[5:]
+		mnc, msin = string(imsi[3:5]), string(imsi[5:])
 	}
 
-	for i := 0; i < len(msin); i += 2 {
-		suci.Buffer = append(suci.Buffer, 0x0)
-		j := len(suci.Buffer) - 1
-		if i+1 == len(msin) {
-			suci.Buffer[j] = 0xf<<4 | hexCharToByte(msin[i])
-		} else {
-			suci.Buffer[j] = hexCharToByte(msin[i+1])<<4 | hexCharToByte(msin[i])
-		}
+	suci := &ie.MobileId5GS{
+		TypeOfId:   ie.IdType_5GS_SUCI,
+		SUPIFormat: 0, // IMSI
+		PlmnId:     ie.PlmnId{MCC: mcc, MNC: mnc},
 	}
-	suci.Len = uint16(len(suci.Buffer))
-	return &suci
+	for i := 0; i < len(msin) && i < len(suci.MSINDigits); i++ {
+		suci.MSINDigits[i] = hexCharToByte(msin[i])
+	}
+	suci.MSINLength = len(msin)
+
+	return suci
 }
 
 func ueRanEmulator() error {
@@ -168,7 +160,7 @@ func ueRanEmulator() error {
 	fmt.Printf("[UERANEM] Connect to UPF successfully\n")
 
 	// send NGSetupRequest Msg
-	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "free5gc")
+	sendMsg, err = test.GetNGSetupRequest([]byte("\x00\x01\x02"), 24, "free5gc", "", "", "")
 	if err != nil {
 		err = fmt.Errorf("GetNGSetupRequest: %v", err)
 		return err
@@ -183,25 +175,25 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
 	fmt.Printf("[UERANEM] NGSetup successfully\n")
 
 	// New UE
-	// ue := test.NewRanUeContext("imsi-208930000007487", 1, security.AlgCiphering128NEA2, security.AlgIntegrity128NIA2,
-	//	models.AccessType__3_GPP_ACCESS)
-	ue := test.NewRanUeContext(uerancfg.Supi, uerancfg.NgapID, security.AlgCiphering128NEA0, security.AlgIntegrity128NIA2,
-		models.AccessType__3_GPP_ACCESS)
+	// ue := test.NewRanUeContext("imsi-208930000007487", 1, message.AlgCiphering128NEA2, message.AlgIntegrity128NIA2,
+	//	models.AccessType_3_GPP_ACCESS)
+	ue := test.NewRanUeContext(uerancfg.Supi, uerancfg.NgapID, message.AlgCiphering128NEA0, message.AlgIntegrity128NIA2,
+		models.AccessType_3_GPP_ACCESS)
 	ue.AmfUeNgapId = uerancfg.NgapID
 	ue.AuthenticationSubs = test.GetAuthSubscription(uerancfg.K, uerancfg.Opc, uerancfg.Op)
 
 	mobileIdentity5GS := encodeSuci([]byte(strings.TrimPrefix(uerancfg.Supi, "imsi-")), len(uerancfg.Mnc))
 
 	ueSecurityCapability := ue.GetUESecurityCapability()
-	registrationRequest := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
-		*mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
+	registrationRequest := nasTestpacket.GetRegistrationRequest(ie.RegType_InitialReg,
+		mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
 	sendMsg, err = test.GetInitialUEMessage(ue.RanUeNgapId, registrationRequest, "")
 	if err != nil {
 		return err
@@ -216,18 +208,22 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	ngapMsg, err := ngap.Decoder(recvMsg[:n])
+	ngapMsg, err := ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
 
 	// Calculate for RES*
-	nasPdu := test.GetNasPdu(ue, ngapMsg.InitiatingMessage.Value.DownlinkNASTransport)
+	nasPdu := test.GetNasPdu(ue, ngapMsg.(*ngapMessage.DownlinkNASTransport))
 	if nasPdu == nil {
 		err = fmt.Errorf("GetNasPdu failed")
 		return err
 	}
-	rand := nasPdu.AuthenticationRequest.GetRANDValue()
+	authRequest, ok := nasPdu.(*message.AuthReq)
+	if !ok || authRequest.AuthParamRAND5GAuthChlg == nil {
+		return fmt.Errorf("expected AuthReq with RAND, got %T", nasPdu)
+	}
+	rand := authRequest.AuthParamRAND5GAuthChlg.Rand
 
 	var mncPad string
 	if len(uerancfg.Mnc) == 2 {
@@ -237,7 +233,7 @@ func ueRanEmulator() error {
 	}
 	snName := "5G:mnc" + mncPad + ".mcc" + uerancfg.Mcc + ".3gppnetwork.org"
 
-	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand[:], snName)
+	resStat := ue.DeriveRESstarAndSetKey(ue.AuthenticationSubs, rand, snName)
 
 	// send NAS Authentication Response
 	pdu := nasTestpacket.GetAuthenticationResponse(resStat, "")
@@ -255,17 +251,17 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
 
 	// send NAS Security Mode Complete Msg
-	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(nasMessage.RegistrationType5GSInitialRegistration,
-		*mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
+	registrationRequestWith5GMM := nasTestpacket.GetRegistrationRequest(ie.RegType_InitialReg,
+		mobileIdentity5GS, nil, ueSecurityCapability, nil, nil, nil)
 	pdu = nasTestpacket.GetSecurityModeComplete(registrationRequestWith5GMM)
 	pdu, err = test.EncodeNasPduWithSecurity(
-		ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCipheredWithNew5gNasSecurityContext, true, true)
+		ue, pdu, message.SecHdrTypeIntegrityProtectedAndCipheredWithNew5gNasSecCtx, true, true)
 	if err != nil {
 		return err
 	}
@@ -283,7 +279,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
@@ -300,7 +296,7 @@ func ueRanEmulator() error {
 
 	// send NAS Registration Complete Msg
 	pdu = nasTestpacket.GetRegistrationComplete(nil)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, message.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		return err
 	}
@@ -318,7 +314,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return nil
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return nil
 	}
@@ -332,8 +328,8 @@ func ueRanEmulator() error {
 		Sd:  uerancfg.Snssai.Sd,
 	}
 	pdu = nasTestpacket.GetUlNasTransport_PduSessionEstablishmentRequest(
-		10, nasMessage.ULNASTransportRequestTypeInitialRequest, "internet", &sNssai)
-	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, nas.SecurityHeaderTypeIntegrityProtectedAndCiphered, true, false)
+		10, ie.ReqType_InitialReq, "internet", &sNssai)
+	pdu, err = test.EncodeNasPduWithSecurity(ue, pdu, message.SecHdrTypeIntegrityProtectedAndCiphered, true, false)
 	if err != nil {
 		return err
 	}
@@ -351,7 +347,7 @@ func ueRanEmulator() error {
 	if err != nil {
 		return err
 	}
-	_, err = ngap.Decoder(recvMsg[:n])
+	_, err = ngapMessage.Parse(recvMsg[:n])
 	if err != nil {
 		return err
 	}
