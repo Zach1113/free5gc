@@ -23,11 +23,11 @@ const (
 	testAusfInstanceID = "00000000-0000-4000-8000-000000000000"
 )
 
-// TestSCPDirectProxy verifies the R17 direct-proxy paths from SCP to UDR, UDM,
+// TestSCP verifies the R17 proxy paths from SCP to UDR, UDM,
 // and AUSF. UDM and UDR advertise SCP as their service endpoint in NRF while
 // retaining their real binding addresses. Consequently, the producer NFs use
 // normal NRF discovery and remain unaware that their requests traverse SCP.
-func TestSCPDirectProxy(t *testing.T) {
+func TestSCP(t *testing.T) {
 	ue := test.NewRanUeContext(
 		"imsi-208930000007487",
 		1,

@@ -43,7 +43,7 @@ const (
 	TestCN                          TestId = "TestCN"
 	TestAFInfluenceOnTrafficRouting TestId = "TestAFInfluenceOnTrafficRouting"
 	TestRequestTwoPDUSessions       TestId = "TestRequestTwoPDUSessions"
-	TestSCPDirectProxy              TestId = "TestSCPDirectProxy"
+	TestSCP                         TestId = "TestSCP"
 )
 
 type StartNFsConfig struct {
@@ -832,7 +832,7 @@ func scpConfig() (*scp_factory.Config, error) {
 
 func udrConfig(testID TestId) error {
 	registerIPv4 := "127.0.0.4"
-	if testID == TestSCPDirectProxy {
+	if testID == TestSCP {
 		// Advertise SCP as the UDR service endpoint while UDR keeps its own bind address.
 		registerIPv4 = "127.0.0.6"
 	}
@@ -935,7 +935,7 @@ func pcfConfig() error {
 
 func udmConfig(testID TestId) error {
 	registerIPv4 := "127.0.0.3"
-	if testID == TestSCPDirectProxy {
+	if testID == TestSCP {
 		// Advertise SCP as the UDM service endpoint while UDM keeps its own bind address.
 		registerIPv4 = "127.0.0.6"
 	}

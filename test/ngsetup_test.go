@@ -104,10 +104,10 @@ func init() {
 			Chf:  true,
 			Bsf:  true,
 			Nef:  true,
-			Scp:  initNfCfg.TestId == test.TestSCPDirectProxy,
+			Scp:  initNfCfg.TestId == test.TestSCP,
 		}
-		if initNfCfg.TestId == test.TestSCPDirectProxy {
-			// The direct-proxy test only needs the NRF and the three producer NFs.
+		if initNfCfg.TestId == test.TestSCP {
+			// The SCP integration test only needs the NRF and the three producer NFs.
 			startNfCfg.Amf = false
 			startNfCfg.Smf = false
 			startNfCfg.Pcf = false
